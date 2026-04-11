@@ -2,9 +2,9 @@
   "name": "n8n-server-hostinger",
   "version": "1.0.0",
   "description": "Despliegue de n8n para Hostinger",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
