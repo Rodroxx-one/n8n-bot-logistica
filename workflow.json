@@ -1,0 +1,99 @@
+{
+  "name": "Bot Logística Escaneo",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "📷 Entendido, leyendo etiqueta con IA... un momento.",
+        "replyToMessageId": "={{ $json.message.message_id }}"
+      },
+      "id": "telegram-ack",
+      "name": "Telegram - Enviando",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": "gemini-1.5-flash",
+        "prompt": "Eres un asistente de logística. Extrae la información de la imagen de esta etiqueta de rollo de tela.\nDevuelve ÚNICAMENTE un JSON válido con estas claves: idRollo, articulo, ancho, largo, color. Si alguno no se encuentra, escribe 'No detectado'. Nunca devuelvas markdown, solo el JSON puro."
+      },
+      "id": "gemini-vision",
+      "name": "Google Gemini Vision",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "value": "1-GJAhGOyFakTFCMQzqtYSE-WaseNfWiaoXMRdu5Tni0" },
+        "sheetName": "Sheet1",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha de Escaneo": "={{ $now }}",
+            "Operario": "={{ $('Telegram Trigger').item.json.message.from.first_name }}",
+            "ID del Rollo": "={{ $json.idRollo }}",
+            "Artículo": "={{ $json.articulo }}",
+            "Ancho (cm)": "={{ $json.ancho }}",
+            "Largo (m)": "={{ $json.largo }}",
+            "Color": "={{ $json.color }}",
+            "Observaciones": "={{ $('Telegram Trigger').item.json.message.caption || 'Sin observaciones' }}"
+          }
+        }
+      },
+      "id": "google-sheets",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.1,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=✅ *¡Registrado en Excel!*\n📦 ID: {{ $json.idRollo }}\n📏 {{ $json.ancho }}cm x {{ $json.largo }}m\n🎨 {{ $json.color }}\n📝 Obs: {{ $('Telegram Trigger').item.json.message.caption || 'Sin observaciones' }}",
+        "parseMode": "Markdown"
+      },
+      "id": "telegram-success",
+      "name": "Telegram - Éxito",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [800, 0]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [ { "node": "Telegram - Enviando", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Telegram - Enviando": {
+      "main": [
+        [ { "node": "Google Gemini Vision", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Google Gemini Vision": {
+      "main": [
+        [ { "node": "Google Sheets", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [ { "node": "Telegram - Éxito", "type": "main", "index": 0 } ]
+      ]
+    }
+  }
+}
