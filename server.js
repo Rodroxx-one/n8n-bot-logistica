@@ -283,10 +283,21 @@ Nunca devuelvas markdown, bloques de código ni explicaciones. Solo el JSON puro
 
 // ─── Guardar en Google Sheets ───────────────────────────────────────────────
 async function guardarEnSheets(data) {
-    const credsPath = path.join(__dirname, 'credentials.json');
-    if (!fs.existsSync(credsPath)) throw new Error('Falta credentials.json');
-
-    const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+    // Leer credenciales desde variable de entorno (producción) o archivo local (dev)
+    let creds;
+    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+        try {
+            creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        } catch (e) {
+            throw new Error('GOOGLE_CREDENTIALS_JSON tiene formato JSON inválido');
+        }
+    } else {
+        const credsPath = path.join(__dirname, 'credentials.json');
+        if (!fs.existsSync(credsPath)) {
+            throw new Error('Faltan credenciales de Google: define GOOGLE_CREDENTIALS_JSON en el entorno o coloca credentials.json en la carpeta raíz');
+        }
+        creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+    }
     const auth  = new JWT({
         email: creds.client_email,
         key: creds.private_key,
