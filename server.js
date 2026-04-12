@@ -301,15 +301,15 @@ Nunca devuelvas markdown, bloques de código ni explicaciones. Solo el JSON puro
 // ─── Guardar en Google Sheets ───────────────────────────────────────────────
 async function guardarEnSheets(data) {
     // Leer credenciales con 3 métodos en orden de prioridad:
-    // 1) Variables individuales GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY (más robusto en hosting)
+    // 1) Variables individuales GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY_B64 (base64, 100% seguro)
     // 2) JSON completo en GOOGLE_CREDENTIALS_JSON
     // 3) Archivo credentials.json local (solo desarrollo)
     let creds;
-    if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+    if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY_B64) {
         creds = {
             client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            // Hostinger puede convertir \n literales — normalizamos ambos casos
-            private_key : process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            // Decodificar desde Base64 — evita cualquier problema de newlines en hosting
+            private_key : Buffer.from(process.env.GOOGLE_PRIVATE_KEY_B64, 'base64').toString('utf8'),
         };
     } else if (process.env.GOOGLE_CREDENTIALS_JSON) {
         try {
