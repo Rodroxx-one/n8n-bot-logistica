@@ -40,18 +40,26 @@ bot.on('photo', async (msg) => {
     const mediaGroup = msg.media_group_id;
     const fileId     = msg.photo[msg.photo.length - 1].file_id;
 
-    // Si el usuario está en espera de observación, ignorar foto nueva (sin solapar)
-    if (userStates.has(chatId)) {
-        await bot.sendMessage(chatId,
-            `⚠️ Aún hay fotos pendientes de procesar. Responde primero la observación anterior.`
-        );
-        return;
-    }
+    try {
+        // Si el usuario está en espera de observación, ignorar foto nueva (sin solapar)
+        if (userStates.has(chatId)) {
+            await bot.sendMessage(chatId,
+                `⚠️ Aún hay fotos pendientes de procesar. Escribe /reset para cancelarlas.`
+            );
+            return;
+        }
 
-    if (mediaGroup) {
-        manejarFotoDeAlbum(mediaGroup, chatId, operario, fileId);
-    } else {
-        await pedirObservacion(chatId, operario, [fileId], false, msg.message_id);
+        if (mediaGroup) {
+            manejarFotoDeAlbum(mediaGroup, chatId, operario, fileId);
+        } else {
+            await pedirObservacion(chatId, operario, [fileId], false, msg.message_id);
+        }
+    } catch (err) {
+        console.error('❌ Error en handler foto:', err.message);
+        await bot.sendMessage(chatId,
+            `❌ Error interno al recibir la foto: _${err.message.substring(0, 200)}_\n\nEscribe /reset e intenta de nuevo.`,
+            { parse_mode: 'Markdown' }
+        ).catch(() => {});
     }
 });
 
@@ -139,6 +147,15 @@ bot.on('text', async (msg) => {
     const texto  = msg.text;
 
     // Comandos siempre disponibles
+    if (texto === '/reset') {
+        userStates.delete(chatId);
+        await bot.sendMessage(chatId,
+            `🔄 *Estado reiniciado.* Ya puedes enviar fotos nuevamente.`,
+            { parse_mode: 'Markdown' }
+        );
+        return;
+    }
+
     if (texto === '/start' || texto === '/ayuda') {
         await bot.sendMessage(chatId,
             `👋 *Bot de Logística — Escaneo de Rollos*\n\n` +
