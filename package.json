@@ -4,8 +4,12 @@
   "description": "Bot de Telegram para escaneo de etiquetas de rollos de tela con Gemini Vision y Google Sheets",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start"   : "node server.js",
+    "pm2:start"  : "pm2 start ecosystem.config.js",
+    "pm2:stop"   : "pm2 stop bot-logistica",
+    "pm2:restart": "pm2 restart bot-logistica",
+    "pm2:logs"   : "pm2 logs bot-logistica",
+    "pm2:status" : "pm2 status"
   },
   "dependencies": {
     "axios": "^1.7.2",

@@ -23,6 +23,7 @@ console.log('🤖 Bot de logística iniciado correctamente.');
 // ─── Cola de procesamiento ──────────────────────────────────────────────────
 let processingQueue = Promise.resolve();
 const DELAY_MS = 1500;
+let totalRegistrados = 0; // Contador global para el health check
 
 // ─── Estado de conversación por usuario ────────────────────────────────────
 // Permite saber si el usuario está esperando escribir una observación
@@ -308,17 +309,51 @@ async function guardarEnSheets(data) {
     });
 
     console.log(`✅ Sheets: ${data.idRollo} | ${data.operario}`);
+    totalRegistrados++; // Sumar al contador del health check
 }
 
 // ─── Utilidad ───────────────────────────────────────────────────────────────
 function esperar(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Limpieza periódica (evita fugas de memoria en fines de semana) ──────────
+// Borra estados de conversación que llevan más de 10 minutos sin actividad
+setInterval(() => {
+    const ahora = Date.now();
+
+    // Limpiar userStates antiguos (>10 min)
+    for (const [chatId, state] of userStates.entries()) {
+        if (state.timestamp && ahora - state.timestamp > 10 * 60 * 1000) {
+            userStates.delete(chatId);
+            console.log(`🧹 Estado limpiado para chat ${chatId}`);
+        }
+    }
+
+    // Limpiar albumTracker colgados (>5 min)
+    for (const [groupId, album] of albumTracker.entries()) {
+        if (album.timestamp && ahora - album.timestamp > 5 * 60 * 1000) {
+            clearTimeout(album.timer);
+            albumTracker.delete(groupId);
+        }
+    }
+}, 5 * 60 * 1000); // Cada 5 minutos
 
 // ─── Servidor HTTP (Hostinger) ──────────────────────────────────────────────
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.get('/', (_, res) => res.send('Bot de Logística activo ✅'));
-app.get('/health', (_, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+app.get('/health', (_, res) => {
+    const mem = process.memoryUsage();
+    res.json({
+        status      : 'ok',
+        uptime_horas: (process.uptime() / 3600).toFixed(1),
+        memoria_mb  : (mem.rss / 1024 / 1024).toFixed(1),
+        registrados : totalRegistrados,
+        estados_activos: userStates.size,
+        albumes_activos: albumTracker.size,
+        timestamp   : new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
+    });
+});
 app.listen(PORT, () => console.log(`🌐 Servidor HTTP activo en puerto ${PORT}`));
 
 process.on('unhandledRejection', (r) => console.error('❌ Error no manejado:', r));
