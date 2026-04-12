@@ -1,99 +1,291 @@
 {
-  "name": "Bot Logística Escaneo",
+  "name": "Bot Logística — Escaneo de Etiquetas",
   "nodes": [
     {
       "parameters": {
         "updates": ["message"]
       },
-      "id": "telegram-trigger",
+      "id": "node-trigger",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "📷 Entendido, leyendo etiqueta con IA... un momento.",
-        "replyToMessageId": "={{ $json.message.message_id }}"
-      },
-      "id": "telegram-ack",
-      "name": "Telegram - Enviando",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [200, 0]
-    },
-    {
-      "parameters": {
-        "resource": "image",
-        "operation": "analyze",
-        "modelId": "gemini-1.5-flash",
-        "prompt": "Eres un asistente de logística. Extrae la información de la imagen de esta etiqueta de rollo de tela.\nDevuelve ÚNICAMENTE un JSON válido con estas claves: idRollo, articulo, ancho, largo, color. Si alguno no se encuentra, escribe 'No detectado'. Nunca devuelvas markdown, solo el JSON puro."
-      },
-      "id": "gemini-vision",
-      "name": "Google Gemini Vision",
-      "type": "@n8n/n8n-nodes-langchain.googleGemini",
       "typeVersion": 1.1,
-      "position": [400, 0]
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-photo",
+              "leftValue": "={{ $json.message.photo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-photo",
+      "name": "IF - Tiene Foto",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "⚠️ Por favor envía una *foto* de la etiqueta del rollo.\n\nNo se detectó ninguna imagen en tu mensaje.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "node-no-photo",
+      "name": "Telegram - Sin foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [440, 500]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "📷 Imagen recibida. Leyendo etiqueta con IA... un momento ⏳",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "reply_to_message_id": "={{ $('Telegram Trigger').item.json.message.message_id }}"
+        }
+      },
+      "id": "node-ack",
+      "name": "Telegram - ACK",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [440, 150]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.photo[$('Telegram Trigger').item.json.message.photo.length - 1].file_id }}",
+        "download": true,
+        "additionalFields": {
+          "mimeType": "image/jpeg"
+        }
+      },
+      "id": "node-download",
+      "name": "Telegram - Descargar Foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [660, 150]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Eres un asistente de logística especializado en etiquetas de rollos de tela. Analiza esta imagen y extrae los siguientes campos.\\n\\nDevuelve ÚNICAMENTE un JSON válido con exactamente estas claves:\\n- idRollo: código o ID del rollo\\n- articulo: nombre del artículo o referencia\\n- ancho: ancho en cm (solo el número)\\n- largo: largo en metros (solo el número)\\n- color: color del rollo\\n\\nSi algún campo no se puede leer claramente, usa \\\"No detectado\\\".\\nNunca devuelvas markdown, bloques de código ni explicaciones. Solo el JSON puro.\"\n        },\n        {\n          \"inlineData\": {\n            \"mimeType\": \"image/jpeg\",\n            \"data\": \"{{ $binary.data.data }}\"\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "node-gemini",
+      "name": "Gemini Vision - Leer Etiqueta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer el texto de la respuesta de Gemini\nconst geminiResponse = $input.first().json;\n\nlet rawText = '';\ntry {\n  rawText = geminiResponse.candidates[0].content.parts[0].text;\n} catch (e) {\n  throw new Error('Gemini no devolvió una respuesta válida: ' + JSON.stringify(geminiResponse));\n}\n\n// Limpiar el texto: remover posibles bloques markdown que Gemini podría incluir\nrawText = rawText.trim();\nrawText = rawText.replace(/^```json\\n?/, '').replace(/\\n?```$/, '');\nrawText = rawText.replace(/^```\\n?/, '').replace(/\\n?```$/, '');\n\n// Parsear el JSON\nlet data;\ntry {\n  data = JSON.parse(rawText);\n} catch (e) {\n  throw new Error('No se pudo parsear el JSON de Gemini. Respuesta: ' + rawText);\n}\n\n// Obtener el operario del trigger original\nconst triggerData = $('Telegram Trigger').first().json;\nconst operario = triggerData.message?.from?.first_name + ' ' + (triggerData.message?.from?.last_name || '');\nconst caption = triggerData.message?.caption || 'Sin observaciones';\nconst chatId = triggerData.message?.chat?.id;\n\nreturn [\n  {\n    json: {\n      idRollo: data.idRollo || 'No detectado',\n      articulo: data.articulo || 'No detectado',\n      ancho: data.ancho || 'No detectado',\n      largo: data.largo || 'No detectado',\n      color: data.color || 'No detectado',\n      operario: operario.trim(),\n      observaciones: caption,\n      chatId: chatId,\n      fechaEscaneo: new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })\n    }\n  }\n];\n"
+      },
+      "id": "node-parse",
+      "name": "Code - Parsear Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 150]
     },
     {
       "parameters": {
         "operation": "append",
-        "documentId": { "value": "1-GJAhGOyFakTFCMQzqtYSE-WaseNfWiaoXMRdu5Tni0" },
-        "sheetName": "Sheet1",
+        "documentId": {
+          "value": "TU_SPREADSHEET_ID",
+          "__rl": true,
+          "mode": "id"
+        },
+        "sheetName": {
+          "value": "Sheet1",
+          "__rl": true,
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Fecha de Escaneo": "={{ $now }}",
-            "Operario": "={{ $('Telegram Trigger').item.json.message.from.first_name }}",
+            "Fecha de Escaneo": "={{ $json.fechaEscaneo }}",
+            "Operario": "={{ $json.operario }}",
             "ID del Rollo": "={{ $json.idRollo }}",
             "Artículo": "={{ $json.articulo }}",
             "Ancho (cm)": "={{ $json.ancho }}",
             "Largo (m)": "={{ $json.largo }}",
             "Color": "={{ $json.color }}",
-            "Observaciones": "={{ $('Telegram Trigger').item.json.message.caption || 'Sin observaciones' }}"
-          }
-        }
+            "Observaciones": "={{ $json.observaciones }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
       },
-      "id": "google-sheets",
-      "name": "Google Sheets",
+      "id": "node-sheets",
+      "name": "Google Sheets - Registrar",
       "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.1,
-      "position": [600, 0]
+      "typeVersion": 4.4,
+      "position": [1320, 150]
     },
     {
       "parameters": {
-        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-        "text": "=✅ *¡Registrado en Excel!*\n📦 ID: {{ $json.idRollo }}\n📏 {{ $json.ancho }}cm x {{ $json.largo }}m\n🎨 {{ $json.color }}\n📝 Obs: {{ $('Telegram Trigger').item.json.message.caption || 'Sin observaciones' }}",
-        "parseMode": "Markdown"
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "=✅ *¡Rollo registrado exitosamente!*\n\n📦 *ID Rollo:* {{ $json.idRollo }}\n🏷️ *Artículo:* {{ $json.articulo }}\n📐 *Medidas:* {{ $json.ancho }}cm × {{ $json.largo }}m\n🎨 *Color:* {{ $json.color }}\n👤 *Operario:* {{ $json.operario }}\n📝 *Obs:* {{ $json.observaciones }}\n🕐 *Fecha:* {{ $json.fechaEscaneo }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
       },
-      "id": "telegram-success",
+      "id": "node-success",
       "name": "Telegram - Éxito",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [800, 0]
+      "typeVersion": 1.2,
+      "position": [1540, 150]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "❌ *Error al procesar la etiqueta.*\n\nNo pude leer la imagen correctamente. Por favor:\n• Asegúrate que la foto sea clara y bien iluminada\n• La etiqueta debe ser legible\n• Intenta enviar la foto nuevamente\n\n_Error técnico registrado._",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "node-error",
+      "name": "Telegram - Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, 400]
     }
   ],
   "connections": {
     "Telegram Trigger": {
       "main": [
-        [ { "node": "Telegram - Enviando", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "IF - Tiene Foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Telegram - Enviando": {
+    "IF - Tiene Foto": {
       "main": [
-        [ { "node": "Google Gemini Vision", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Telegram - ACK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Sin foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Google Gemini Vision": {
+    "Telegram - ACK": {
       "main": [
-        [ { "node": "Google Sheets", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Telegram - Descargar Foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Google Sheets": {
+    "Telegram - Descargar Foto": {
       "main": [
-        [ { "node": "Telegram - Éxito", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Gemini Vision - Leer Etiqueta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Vision - Leer Etiqueta": {
+      "main": [
+        [
+          {
+            "node": "Code - Parsear Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parsear Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Registrar": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Éxito",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
-  }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "errorWorkflow": ""
+  },
+  "pinData": {}
 }
