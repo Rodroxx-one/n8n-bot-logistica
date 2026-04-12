@@ -283,9 +283,18 @@ Nunca devuelvas markdown, bloques de código ni explicaciones. Solo el JSON puro
 
 // ─── Guardar en Google Sheets ───────────────────────────────────────────────
 async function guardarEnSheets(data) {
-    // Leer credenciales desde variable de entorno (producción) o archivo local (dev)
+    // Leer credenciales con 3 métodos en orden de prioridad:
+    // 1) Variables individuales GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY (más robusto en hosting)
+    // 2) JSON completo en GOOGLE_CREDENTIALS_JSON
+    // 3) Archivo credentials.json local (solo desarrollo)
     let creds;
-    if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+        creds = {
+            client_email: process.env.GOOGLE_CLIENT_EMAIL,
+            // Hostinger puede convertir \n literales — normalizamos ambos casos
+            private_key : process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        };
+    } else if (process.env.GOOGLE_CREDENTIALS_JSON) {
         try {
             creds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
         } catch (e) {
@@ -294,7 +303,7 @@ async function guardarEnSheets(data) {
     } else {
         const credsPath = path.join(__dirname, 'credentials.json');
         if (!fs.existsSync(credsPath)) {
-            throw new Error('Faltan credenciales de Google: define GOOGLE_CREDENTIALS_JSON en el entorno o coloca credentials.json en la carpeta raíz');
+            throw new Error('Faltan credenciales de Google: define GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY en el entorno');
         }
         creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
     }
