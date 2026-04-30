@@ -138,32 +138,38 @@ async function pedirObservacion(chatId, lote) {
         ? `📦 *${cantidad} foto${cantidad > 1 ? 's' : ''} recibida${cantidad > 1 ? 's' : ''}.*\n\n¿Deseas agregar una observación para este lote?`
         : `📷 *Foto recibida.*\n\n¿Deseas agregar una observación?`;
 
-    let msgEnviado;
-    try {
-        msgEnviado = await bot.sendMessage(chatId, txt, {
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [[
-                    { text: '✅ Sin observación',   callback_data: `obs_no|${chatId}` },
-                    { text: '📝 Agregar observación', callback_data: `obs_si|${chatId}` }
-                ]]
-            }
-        });
-    } catch (err) {
-        console.error('❌ Error enviando pregunta:', err.message);
-        return;
-    }
-
-    // Guardar estado: preservar la cola existente si la hay
+    // ⚠️ CRÍTICO: reservar estado SÍNCRONAMENTE antes de cualquier await
+    // Esto impide que llamadas concurrentes pasen el check de encolarLote
     const colaExistente = userStates.get(chatId)?.cola || [];
     userStates.set(chatId, {
         estado   : 'esperando_decision',
         pendiente: lote,
         cola     : colaExistente,
         timestamp: Date.now(),
-        msgId    : msgEnviado.message_id
+        msgId    : null  // se actualiza tras el send
     });
+
+    let msgEnviado;
+    try {
+        msgEnviado = await bot.sendMessage(chatId, txt, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[
+                    { text: '✅ Sin observación',    callback_data: `obs_no|${chatId}` },
+                    { text: '📝 Agregar observación', callback_data: `obs_si|${chatId}` }
+                ]]
+            }
+        });
+        // Actualizar msgId ahora que tenemos el ID del mensaje enviado
+        const state = userStates.get(chatId);
+        if (state) state.msgId = msgEnviado.message_id;
+    } catch (err) {
+        // Rollback del estado si el send falló
+        console.error('❌ Error enviando pregunta:', err.message);
+        userStates.delete(chatId);
+    }
 }
+
 
 /**
  * Cuando el lote actual termina, saca el siguiente de la cola y pregunta.
