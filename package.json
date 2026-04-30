@@ -1,0 +1,29 @@
+{
+  "name": "bot-logistica",
+  "version": "2.0.0",
+  "description": "Bot de Telegram para escaneo de etiquetas de rollos de tela con Gemini Vision y Google Sheets",
+  "main": "server.js",
+  "scripts": {
+    "start"   : "node server.js",
+    "pm2:start"  : "pm2 start ecosystem.config.js",
+    "pm2:stop"   : "pm2 stop bot-logistica",
+    "pm2:restart": "pm2 restart bot-logistica",
+    "pm2:logs"   : "pm2 logs bot-logistica",
+    "pm2:status" : "pm2 status"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-auth-library": "^9.11.0",
+    "google-spreadsheet": "^4.1.2",
+    "googleapis": "^144.0.0",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

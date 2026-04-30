@@ -1,0 +1,3109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WMS Bodega — Sistema de Gestión</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --surface3: #232f45;
+    --accent: #00d4aa;
+    --accent2: #0099ff;
+    --accent3: #ff6b35;
+    --warn: #ffb347;
+    --danger: #ff4d6d;
+    --text: #e8edf5;
+    --text2: #8896b3;
+    --text3: #4d5f7a;
+    --border: #1e2d45;
+    --border2: #2a3f5f;
+    --card-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --glow-accent: 0 0 20px rgba(0,212,170,0.25);
+    --glow-blue: 0 0 20px rgba(0,153,255,0.2);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+
+  /* ── ROLES ── */
+  .role-badge {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:3px 10px; border-radius:20px; font-size:10px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.5px;
+  }
+  .role-badge.operario { background:rgba(0,153,255,0.12); color:var(--accent2); border:1px solid rgba(0,153,255,0.25); }
+  .role-badge.supervisor { background:rgba(255,179,71,0.12); color:var(--warn); border:1px solid rgba(255,179,71,0.25); }
+  .role-badge.admin { background:rgba(0,212,170,0.12); color:var(--accent); border:1px solid rgba(0,212,170,0.25); }
+
+  /* ── RESPONSIVE MOBILE WEB ── */
+  @media (max-width: 768px) {
+    .header { padding: 0 16px; }
+    .sidebar { display: none !important; }
+    .pc-content { padding: 16px; }
+    #pc-view { flex-direction: column; }
+    .kpi-grid { grid-template-columns: 1fr 1fr !important; }
+    .charts-row { grid-template-columns: 1fr !important; }
+    .operarios-grid { grid-template-columns: 1fr 1fr !important; }
+    .export-grid { grid-template-columns: 1fr !important; }
+    #mobile-view { display: none !important; }
+    .mobile-hint-bar { display: flex !important; }
+    .logo { font-size: 18px; }
+    .view-toggle { display: none; }
+  }
+  @media (min-width: 769px) {
+    .mobile-hint-bar { display: none !important; }
+  }
+
+  /* ── MOBILE HINT BAR ── */
+  .mobile-hint-bar {
+    background: rgba(0,212,170,0.08); border-bottom: 1px solid rgba(0,212,170,0.2);
+    padding: 8px 16px; font-size: 11px; color: var(--accent);
+    align-items: center; gap: 8px; display: none;
+  }
+
+  /* ── INGRESO TYPE CARDS ── */
+  .ing-type-card {
+    border-radius: 13px; border: 1.5px solid var(--border2);
+    padding: 16px 14px; cursor: pointer; transition: all .2s;
+    background: var(--surface2); text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .ing-type-card:hover { border-color: var(--border2); background: var(--surface3); }
+  .ing-type-card.selected-tejeduria { border-color: var(--accent); background: rgba(0,212,170,0.08); }
+  .ing-type-card.selected-proveedor { border-color: var(--warn); background: rgba(255,179,71,0.08); }
+  .ing-type-card.selected-costura { border-color: #c084fc; background: rgba(192,132,252,0.08); }
+  .ing-type-card.selected-plegado { border-color: var(--accent2); background: rgba(0,153,255,0.08); }
+  .ing-type-icon { font-size: 28px; }
+  .ing-type-label { font-size: 12px; font-weight: 700; color: var(--text); }
+  .ing-type-sub { font-size: 10px; color: var(--text3); line-height: 1.3; }
+  .ing-type-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-top: 2px;
+  }
+  .ing-type-badge.sup { background: rgba(255,179,71,0.2); color: var(--warn); }
+  .ing-type-badge.op { background: rgba(0,212,170,0.2); color: var(--accent); }
+
+  /* ── DESPACHO TYPE ── */
+  .despacho-card {
+    border-radius: 13px; border: 1.5px solid var(--border2);
+    padding: 14px; cursor: pointer; transition: all .2s;
+    background: var(--surface2); display: flex; align-items: center; gap: 12px;
+  }
+  .despacho-card:hover { background: var(--surface3); }
+  .despacho-card.selected { border-color: var(--accent3); background: rgba(255,107,53,0.08); }
+  .despacho-icon { font-size: 26px; flex-shrink: 0; }
+  .despacho-label { font-size: 13px; font-weight: 700; color: var(--text); }
+  .despacho-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ── HISTORIAL OPERARIO ── */
+  .hist-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+    border-left: 3px solid transparent;
+  }
+  .hist-item.ingreso { border-left-color: var(--accent); }
+  .hist-item.traslado { border-left-color: var(--accent2); }
+  .hist-item.despacho { border-left-color: var(--accent3); }
+  .hist-item.costura { border-left-color: #c084fc; }
+  .hist-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+  .hist-main { font-size: 13px; font-weight: 600; color: var(--text); }
+  .hist-time { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text3); }
+  .hist-sub { font-size: 11px; color: var(--text2); }
+
+  /* ─── BACKGROUND GRID ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10,14,26,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.5; transform:scale(0.8); }
+  }
+
+  .view-toggle {
+    display: flex; gap: 4px;
+    background: var(--surface2);
+    border-radius: 8px; padding: 4px;
+    border: 1px solid var(--border);
+  }
+  .toggle-btn {
+    padding: 6px 18px; border-radius: 6px; border: none;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.2s;
+    background: transparent; color: var(--text2);
+  }
+  .toggle-btn.active {
+    background: var(--accent); color: #000; font-weight: 700;
+  }
+
+  /* ─── MAIN LAYOUT ─── */
+  .main { padding-top: 60px; position: relative; z-index: 1; }
+
+  /* ─── SECTION TITLES ─── */
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 3px;
+    color: var(--accent); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  /* ═══════════════════════════════════════
+     PC DASHBOARD VIEW
+  ═══════════════════════════════════════ */
+  #pc-view { display: flex; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px; min-height: calc(100vh - 60px);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    flex-shrink: 0;
+    position: sticky; top: 60px; height: calc(100vh - 60px);
+    overflow-y: auto;
+  }
+
+  .sidebar-section { margin-bottom: 28px; padding: 0 16px; }
+  .sidebar-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 3px; color: var(--text3);
+    text-transform: uppercase; margin-bottom: 8px;
+    padding: 0 8px;
+  }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.2s;
+    color: var(--text2); font-size: 14px; font-weight: 500;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active {
+    background: rgba(0,212,170,0.1);
+    color: var(--accent);
+    border-color: rgba(0,212,170,0.2);
+  }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-badge {
+    margin-left: auto;
+    background: var(--accent); color: #000;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 20px;
+  }
+
+  /* PC Content */
+  .pc-content { flex: 1; padding: 28px 32px; overflow-y: auto; }
+
+  /* Dashboard page */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px; letter-spacing: 2px;
+    color: var(--text); line-height: 1;
+  }
+  .page-header p { color: var(--text2); font-size: 14px; margin-top: 4px; }
+
+  /* KPI Cards */
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 16px; margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative; overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: default;
+  }
+  .kpi-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .kpi-card.green::before { background: var(--accent); }
+  .kpi-card.blue::before { background: var(--accent2); }
+  .kpi-card.orange::before { background: var(--accent3); }
+  .kpi-card.yellow::before { background: var(--warn); }
+
+  .kpi-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .kpi-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 36px; font-weight: 700;
+    color: var(--text); margin: 8px 0 4px;
+    line-height: 1;
+  }
+  .kpi-card.green .kpi-value { color: var(--accent); }
+  .kpi-card.blue .kpi-value { color: var(--accent2); }
+  .kpi-card.orange .kpi-value { color: var(--accent3); }
+  .kpi-card.yellow .kpi-value { color: var(--warn); }
+
+  .kpi-sub { font-size: 12px; color: var(--text3); }
+  .kpi-icon { position: absolute; right: 16px; top: 16px; font-size: 24px; opacity: 0.15; }
+
+  /* Charts Row */
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .card-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; padding: 3px 10px;
+    border-radius: 20px; font-weight: 700;
+  }
+  .card-badge.live {
+    background: rgba(0,212,170,0.15); color: var(--accent);
+    border: 1px solid rgba(0,212,170,0.3);
+  }
+
+  /* Zone Map */
+  .zone-map { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 8px; }
+  .zone-cell {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 14px;
+    cursor: pointer; transition: all 0.2s;
+    position: relative;
+  }
+  .zone-cell:hover { border-color: var(--accent); background: rgba(0,212,170,0.05); }
+  .zone-cell.wide { grid-column: span 2; }
+  .zone-name { font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+  .zone-count {
+    font-family: 'Space Mono', monospace;
+    font-size: 24px; font-weight: 700; color: var(--text);
+    margin: 6px 0 2px;
+  }
+  .zone-label { font-size: 10px; color: var(--text3); }
+  .zone-bar {
+    height: 3px; border-radius: 2px; margin-top: 10px;
+    background: var(--border2); overflow: hidden;
+  }
+  .zone-bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+  .zone-cell:nth-child(1) .zone-bar-fill { background: var(--accent); width: 72%; }
+  .zone-cell:nth-child(2) .zone-bar-fill { background: var(--accent2); width: 45%; }
+  .zone-cell:nth-child(3) .zone-bar-fill { background: var(--accent3); width: 88%; }
+  .zone-cell:nth-child(4) .zone-bar-fill { background: var(--warn); width: 30%; }
+  .zone-cell:nth-child(5) .zone-bar-fill { background: #c084fc; width: 60%; }
+
+  /* Activity Feed */
+  .activity-feed { display: flex; flex-direction: column; gap: 10px; }
+  .activity-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+    animation: slideIn 0.4s ease forwards;
+  }
+  @keyframes slideIn {
+    from { opacity:0; transform: translateX(-10px); }
+    to { opacity:1; transform: translateX(0); }
+  }
+  .activity-item:hover { border-color: var(--border2); }
+  .activity-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .activity-dot.entrada { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .activity-dot.traslado { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  .activity-dot.produccion { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+  .activity-dot.salida { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  .activity-info { flex: 1; }
+  .activity-main { font-size: 13px; font-weight: 500; color: var(--text); }
+  .activity-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .activity-meta { text-align: right; }
+  .activity-time { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text3); }
+  .activity-op { font-size: 11px; color: var(--accent); font-weight: 600; }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tag.entrada { background: rgba(0,212,170,0.1); color: var(--accent); }
+  .tag.traslado { background: rgba(0,153,255,0.1); color: var(--accent2); }
+  .tag.produccion { background: rgba(255,107,53,0.1); color: var(--accent3); }
+  .tag.salida { background: rgba(255,77,109,0.1); color: var(--danger); }
+
+  /* Inventory Table */
+  .inv-table { width: 100%; border-collapse: collapse; }
+  .inv-table th {
+    text-align: left; padding: 10px 12px;
+    font-size: 11px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+  .inv-table td {
+    padding: 11px 12px;
+    font-size: 13px; color: var(--text);
+    border-bottom: 1px solid rgba(30,45,69,0.5);
+  }
+  .inv-table tr:hover td { background: rgba(0,212,170,0.03); }
+  .code-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: var(--accent);
+    background: rgba(0,212,170,0.08);
+    padding: 3px 8px; border-radius: 4px;
+    border: 1px solid rgba(0,212,170,0.15);
+  }
+  .stock-num { font-family: 'Space Mono', monospace; font-weight: 700; }
+
+  /* Operarios page */
+  .operarios-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .operario-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center; position: relative;
+    transition: transform 0.2s;
+  }
+  .operario-card:hover { transform: translateY(-2px); }
+  .operario-card.online::before {
+    content: ''; position: absolute; top: 12px; right: 12px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  .operario-avatar {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--surface2), var(--surface3));
+    border: 2px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin: 0 auto 12px;
+    font-weight: 700;
+  }
+  .operario-card.online .operario-avatar { border-color: var(--accent); }
+  .operario-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .operario-role { font-size: 12px; color: var(--text3); margin-bottom: 12px; }
+  .operario-stats { display: flex; justify-content: center; gap: 16px; }
+  .op-stat { text-align: center; }
+  .op-stat-val { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; color: var(--accent); }
+  .op-stat-label { font-size: 10px; color: var(--text3); }
+
+  /* Btn */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px; border: none;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #00eebb; transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent; color: var(--text2);
+    border: 1px solid var(--border2);
+  }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+
+  /* Export section */
+  .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .export-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex; align-items: center; gap: 16px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .export-card:hover { border-color: var(--accent); background: rgba(0,212,170,0.03); transform: translateY(-2px); }
+  .export-icon { font-size: 32px; }
+  .export-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .export-desc { font-size: 12px; color: var(--text2); }
+
+  /* ═══════════════════════════════════════
+     MOBILE VIEW
+  ═══════════════════════════════════════ */
+  #mobile-view { display: none; justify-content: center; align-items: flex-start; padding: 32px 16px; gap: 32px; flex-wrap: wrap; }
+
+  /* ── STEP INDICATOR ── */
+  .ing-steps { display:flex; align-items:center; padding:0 20px; margin-bottom:14px; flex-shrink:0; }
+  .ing-step { display:flex; align-items:center; gap:5px; }
+  .ing-circle {
+    width:22px; height:22px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; transition:all .3s;
+    border:1.5px solid var(--border2); color:var(--text3); background:var(--surface2);
+  }
+  .ing-circle.done { background:var(--accent); border-color:var(--accent); color:#000; }
+  .ing-circle.active { border-color:var(--accent); color:var(--accent); box-shadow:0 0 10px rgba(0,212,170,.3); }
+  .ing-step-lbl { font-size:9px; color:var(--text3); font-weight:600; white-space:nowrap; }
+  .ing-step-lbl.active { color:var(--accent); }
+  .ing-line { flex:1; height:1.5px; background:var(--border); margin:0 5px; }
+  .ing-line.done { background:var(--accent); }
+
+  /* ── INGRESO SPECIFIC ── */
+  .ing-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:14px; margin-bottom:10px;
+  }
+  .ing-card-label {
+    font-size:10px; font-weight:700; color:var(--text3);
+    text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px;
+    display:flex; align-items:center; gap:5px;
+  }
+  .nv-input-mob {
+    width:100%; padding:13px 14px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    border-radius:10px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:17px; font-weight:700;
+    outline:none; letter-spacing:2px; transition:border-color .2s;
+  }
+  .nv-input-mob:focus { border-color:var(--accent); }
+  .nv-input-mob::placeholder { color:var(--text3); font-size:12px; letter-spacing:0; font-family:'DM Sans',sans-serif; font-weight:400; }
+  .nv-confirmed-mob {
+    display:flex; align-items:center; gap:10px;
+    background:rgba(0,212,170,0.08); border:1.5px solid rgba(0,212,170,0.3);
+    border-radius:10px; padding:11px 13px;
+  }
+  .prod-search-mob {
+    width:100%; padding:10px 13px; margin-bottom:8px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    border-radius:10px; color:var(--text);
+    font-family:'DM Sans',sans-serif; font-size:13px; outline:none;
+    transition:border-color .2s;
+  }
+  .prod-search-mob:focus { border-color:var(--accent2); }
+  .prod-search-mob::placeholder { color:var(--text3); }
+  .prod-list-mob { display:flex; flex-direction:column; gap:5px; max-height:150px; overflow-y:auto; }
+  .prod-list-mob::-webkit-scrollbar { display:none; }
+  .prod-item-mob {
+    display:flex; align-items:center; gap:9px; padding:9px 11px;
+    border-radius:8px; background:var(--surface2); border:1.5px solid transparent;
+    cursor:pointer; transition:all .15s;
+  }
+  .prod-item-mob.selected { border-color:var(--accent2); background:rgba(0,153,255,0.07); }
+  .prod-code-mob { font-family:'Space Mono',monospace; font-size:10px; color:var(--accent2); background:rgba(0,153,255,0.1); padding:2px 6px; border-radius:4px; flex-shrink:0; }
+  .zona-grid-mob { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .zona-btn-mob {
+    padding:9px 6px; border-radius:8px; text-align:center;
+    border:1.5px solid var(--border2); background:var(--surface2);
+    cursor:pointer; transition:all .15s;
+    font-size:11px; font-weight:600; color:var(--text2);
+  }
+  .zona-btn-mob.selected { border-color:var(--accent); background:rgba(0,212,170,0.08); color:var(--accent); }
+
+  /* ── SCAN SCREEN ── */
+  .scan-counter-strip { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+  .scan-counter-box { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:9px 6px; text-align:center; }
+  .scan-counter-val { font-family:'Space Mono',monospace; font-size:20px; font-weight:700; }
+  .scan-counter-lbl { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+  .scan-input-box { background:var(--surface); border:1.5px dashed var(--border2); border-radius:13px; padding:14px; margin-bottom:10px; transition:border-color .3s; }
+  .scan-input-box.hot { border-color:var(--accent); border-style:solid; }
+  .scan-row { display:flex; gap:7px; align-items:center; margin-bottom:8px; }
+  .scan-field {
+    flex:1; padding:11px 13px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    border-radius:8px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:14px; font-weight:700;
+    outline:none; letter-spacing:1.5px; transition:border-color .2s;
+  }
+  .scan-field:focus { border-color:var(--accent); }
+  .scan-field::placeholder { color:var(--text3); font-size:11px; letter-spacing:0; font-family:'DM Sans',sans-serif; font-weight:400; }
+  .scan-cam-btn {
+    width:42px; height:42px; border-radius:9px; border:1.5px solid var(--border2);
+    background:var(--surface2); color:var(--text2); font-size:18px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s;
+  }
+  .scan-add-btn {
+    width:42px; height:42px; border-radius:9px; border:none;
+    background:var(--accent); color:#000; font-size:20px; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; flex-shrink:0;
+  }
+  .scan-add-btn:active { transform:scale(0.94); }
+  .scan-hint-mob { font-size:10px; color:var(--text3); text-align:center; transition:color .3s; }
+  .rollos-list-mob { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
+  .rollos-list-mob::-webkit-scrollbar { display:none; }
+  .rollo-row {
+    display:flex; align-items:center; gap:9px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:9px; padding:9px 11px;
+    animation: slideUp .2s ease forwards;
+  }
+  @keyframes slideUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .rollo-idx { font-size:10px; color:var(--text3); width:18px; text-align:right; flex-shrink:0; }
+  .rollo-id { font-family:'Space Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); flex:1; }
+  .rollo-ok { font-size:9px; font-weight:700; padding:2px 7px; border-radius:4px; background:rgba(0,212,170,0.1); color:var(--accent); }
+  .rollo-del-btn { background:none; border:none; color:var(--text3); font-size:14px; cursor:pointer; padding:0 2px; }
+  .rollo-del-btn:hover { color:var(--danger); }
+
+  /* ── CONFIRM SCREEN ── */
+  .confirm-header-mob {
+    background:linear-gradient(135deg,rgba(0,212,170,0.1),rgba(0,153,255,0.05));
+    border:1.5px solid rgba(0,212,170,0.2); border-radius:13px; padding:14px; margin-bottom:10px;
+  }
+  .confirm-grid-mob { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+  .confirm-stat-mob { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px; text-align:center; }
+  .confirm-stat-val { font-family:'Space Mono',monospace; font-size:22px; font-weight:700; }
+  .confirm-stat-lbl { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-top:3px; }
+  .confirm-rollos-mob { display:flex; flex-direction:column; gap:5px; max-height:160px; overflow-y:auto; margin-bottom:10px; }
+  .confirm-rollos-mob::-webkit-scrollbar { display:none; }
+  .confirm-rollo-mob {
+    display:flex; align-items:center; gap:7px; padding:8px 11px;
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  }
+
+  .phone-frame {
+    width: 375px; height: 750px;
+    background: #0d0d0d;
+    border-radius: 40px;
+    border: 3px solid #2a2a2a;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6), inset 0 0 0 1px #333;
+    position: relative; overflow: hidden;
+    flex-shrink: 0;
+  }
+  .phone-notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 28px;
+    background: #0d0d0d; border-radius: 0 0 16px 16px;
+    z-index: 10;
+  }
+  .phone-screen {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    overflow: hidden;
+    border-radius: 38px;
+  }
+
+  /* Mobile screens */
+  .mobile-screen { display: none; width: 100%; height: 100%; flex-direction: column; }
+  .mobile-screen.active { display: flex; }
+
+  /* Mobile status bar */
+  .mobile-status {
+    padding: 36px 20px 8px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+  }
+  .mobile-time { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; color: var(--text); }
+  .mobile-icons { font-size: 12px; color: var(--text2); display: flex; gap: 4px; }
+
+  /* Mobile Header */
+  .mobile-header {
+    padding: 8px 20px 16px;
+    flex-shrink: 0;
+  }
+  .mobile-header-row {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .mobile-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px; letter-spacing: 2px; color: var(--text);
+  }
+  .mobile-subtitle { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .mobile-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #000;
+  }
+
+  /* Mobile content scroll */
+  .mobile-content { flex: 1; overflow-y: auto; padding: 0 16px 80px; }
+  .mobile-content::-webkit-scrollbar { display: none; }
+
+  /* Mobile action buttons */
+  .mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .mobile-action-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 12px;
+    text-align: center; cursor: pointer;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .mobile-action-btn::before {
+    content: ''; position: absolute; inset: 0; opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .mobile-action-btn:active::before { opacity: 1; }
+  .mobile-action-btn.primary { background: var(--accent); border-color: var(--accent); }
+  .mobile-action-btn.primary .mac-icon { color: #000; }
+  .mobile-action-btn.primary .mac-label { color: #000; }
+  .mobile-action-btn.secondary { background: var(--surface2); }
+  .mac-icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .mac-label { font-size: 12px; font-weight: 600; color: var(--text); }
+  .mobile-action-btn.wide { grid-column: span 2; display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-align: left; }
+  .mobile-action-btn.wide .mac-icon { font-size: 22px; margin: 0; }
+  .mobile-action-btn.wide .mac-label { font-size: 13px; }
+
+  /* Mobile recent */
+  .mobile-section-title { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+  .mobile-movement {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .mobile-mov-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .mobile-mov-icon.traslado { background: rgba(0,153,255,0.1); }
+  .mobile-mov-icon.entrada { background: rgba(0,212,170,0.1); }
+  .mobile-mov-icon.produccion { background: rgba(255,107,53,0.1); }
+  .mobile-mov-main { font-size: 12px; font-weight: 600; color: var(--text); }
+  .mobile-mov-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .mobile-mov-time { margin-left: auto; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text3); }
+
+  /* Mobile bottom nav */
+  .mobile-bottom-nav {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(17,24,39,0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    padding: 10px 0 20px;
+    display: flex; justify-content: space-around;
+  }
+  .mobile-nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; padding: 0 12px;
+  }
+  .mobile-nav-icon { font-size: 20px; }
+  .mobile-nav-label { font-size: 9px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .mobile-nav-item.active .mobile-nav-label { color: var(--accent); }
+
+  /* ── INGRESO FLOW STYLES ── */
+  .mob-back-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; padding: 36px 20px 0; flex-shrink:0; }
+  .mob-back-btn {
+    width:32px; height:32px; border-radius:50%;
+    background:var(--surface2); border:none; color:var(--text2);
+    font-size:16px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .mob-screen-title { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:2px; color:var(--text); }
+  .mob-screen-sub { font-size:11px; color:var(--text3); margin-top:1px; }
+
+  /* Steps */
+  .mob-steps {
+    display:flex; align-items:center; padding: 8px 20px 14px; flex-shrink:0;
+  }
+  .mob-step { display:flex; align-items:center; gap:5px; }
+  .mob-step-circle {
+    width:22px; height:22px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; transition:all .3s;
+    border:1.5px solid var(--border2); color:var(--text3); background:var(--surface2);
+    flex-shrink:0;
+  }
+  .mob-step-circle.done { background:var(--accent); border-color:var(--accent); color:#000; }
+  .mob-step-circle.active { border-color:var(--accent); color:var(--accent); box-shadow:0 0 10px rgba(0,212,170,.3); }
+  .mob-step-lbl { font-size:9px; color:var(--text3); font-weight:600; white-space:nowrap; }
+  .mob-step-lbl.active { color:var(--accent); }
+  .mob-step-line { flex:1; height:1.5px; background:var(--border); margin:0 4px; }
+  .mob-step-line.done { background:var(--accent); }
+
+  /* Scroll area */
+  .mob-scroll { flex:1; overflow-y:auto; padding:0 18px 20px; }
+  .mob-scroll::-webkit-scrollbar { display:none; }
+
+  /* Inner cards */
+  .mob-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:14px; margin-bottom:10px;
+  }
+  .mob-card-label {
+    font-size:9px; font-weight:700; color:var(--text3);
+    text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px;
+    display:flex; align-items:center; gap:5px;
+  }
+
+  /* NV Input */
+  .mob-nv-input {
+    width:100%; padding:13px 14px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    border-radius:10px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:17px; font-weight:700;
+    outline:none; letter-spacing:2px; transition:border-color .2s;
+  }
+  .mob-nv-input:focus { border-color:var(--accent); }
+  .mob-nv-input::placeholder { color:var(--text3); font-size:13px; letter-spacing:0; font-family:'DM Sans',sans-serif; font-weight:400; }
+
+  /* Product search */
+  .mob-prod-search {
+    width:100%; padding:10px 12px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    border-radius:10px; color:var(--text);
+    font-family:'DM Sans',sans-serif; font-size:13px;
+    outline:none; margin-bottom:8px; transition:border-color .2s;
+  }
+  .mob-prod-search:focus { border-color:var(--accent2); }
+  .mob-prod-search::placeholder { color:var(--text3); }
+  .mob-prod-list { display:flex; flex-direction:column; gap:5px; max-height:150px; overflow-y:auto; }
+  .mob-prod-list::-webkit-scrollbar { display:none; }
+  .mob-prod-item {
+    display:flex; align-items:center; gap:8px;
+    padding:9px 11px; border-radius:8px;
+    background:var(--surface2); border:1.5px solid transparent;
+    cursor:pointer; transition:all .15s;
+  }
+  .mob-prod-item.selected { border-color:var(--accent2); background:rgba(0,153,255,.07); }
+  .mob-prod-code { font-family:'Space Mono',monospace; font-size:10px; color:var(--accent2); background:rgba(0,153,255,.1); padding:2px 6px; border-radius:4px; flex-shrink:0; }
+  .mob-prod-name { font-size:11px; color:var(--text); flex:1; line-height:1.3; }
+
+  /* Selected product pill */
+  .mob-selected-prod {
+    display:flex; align-items:center; gap:9px;
+    background:rgba(0,153,255,.06); border:1.5px solid rgba(0,153,255,.25);
+    border-radius:10px; padding:11px 13px;
+  }
+  .mob-sel-code { font-family:'Space Mono',monospace; font-size:11px; color:var(--accent2); }
+  .mob-sel-name { font-size:12px; font-weight:600; color:var(--text); }
+  .mob-sel-detail { font-size:10px; color:var(--text3); }
+  .mob-change-btn {
+    font-size:10px; color:var(--text3); background:var(--surface3);
+    border:none; padding:4px 8px; border-radius:6px; cursor:pointer;
+    font-family:'DM Sans',sans-serif; font-weight:600; margin-left:auto; flex-shrink:0;
+  }
+
+  /* Zona grid */
+  .mob-zona-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .mob-zona-btn {
+    padding:9px 6px; border-radius:8px; text-align:center;
+    border:1.5px solid var(--border2); background:var(--surface2);
+    cursor:pointer; transition:all .15s;
+    font-family:'DM Sans',sans-serif; font-size:11px; font-weight:600; color:var(--text2);
+  }
+  .mob-zona-btn.selected { border-color:var(--accent); background:rgba(0,212,170,.08); color:var(--accent); }
+  .mob-zona-icon { font-size:16px; display:block; margin-bottom:3px; }
+
+  /* Primary / Secondary btns */
+  .mob-primary-btn {
+    width:100%; padding:15px; border-radius:13px; border:none;
+    background:var(--accent); color:#000;
+    font-family:'DM Sans',sans-serif; font-size:14px; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px;
+    transition:all .2s; margin-top:6px;
+  }
+  .mob-primary-btn:disabled { background:var(--surface3); color:var(--text3); cursor:not-allowed; }
+  .mob-secondary-btn {
+    width:100%; padding:12px; border-radius:13px;
+    background:transparent; border:1.5px solid var(--border2); color:var(--text2);
+    font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+    cursor:pointer; margin-top:7px;
+  }
+
+  /* Counters */
+  .mob-counter-strip { display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; margin-bottom:12px; }
+  .mob-counter-box {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:9px 6px; text-align:center;
+  }
+  .mob-counter-val { font-family:'Space Mono',monospace; font-size:20px; font-weight:700; }
+  .mob-counter-lbl { font-size:8px; color:var(--text3); text-transform:uppercase; letter-spacing:.8px; margin-top:2px; }
+
+  /* Scan box */
+  .mob-scan-box {
+    background:var(--surface); border:1.5px dashed var(--border2);
+    border-radius:12px; padding:13px; margin-bottom:11px; transition:border-color .3s;
+  }
+  .mob-scan-box.active { border-color:var(--accent); border-style:solid; }
+  .mob-scan-row { display:flex; gap:7px; align-items:center; margin-bottom:8px; }
+  .mob-scan-input {
+    flex:1; padding:11px 12px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    border-radius:8px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:14px; font-weight:700;
+    outline:none; letter-spacing:1px; transition:border-color .2s;
+  }
+  .mob-scan-input:focus { border-color:var(--accent); }
+  .mob-scan-input::placeholder { color:var(--text3); font-size:11px; letter-spacing:0; font-family:'DM Sans',sans-serif; font-weight:400; }
+  .mob-cam-btn {
+    width:40px; height:40px; border-radius:8px;
+    background:var(--surface2); border:1.5px solid var(--border2);
+    color:var(--text2); font-size:18px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .mob-add-btn {
+    width:40px; height:40px; border-radius:8px; border:none;
+    background:var(--accent); color:#000; font-size:20px; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .mob-scan-hint { font-size:10px; color:var(--text3); text-align:center; }
+
+  /* Rollos list */
+  .mob-rollos-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+  .mob-rollos-title { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1px; }
+  .mob-rollos-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
+  .mob-rollos-list::-webkit-scrollbar { display:none; }
+  .mob-rollo-item {
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:9px; padding:9px 11px;
+    animation:slideUp .2s ease forwards;
+  }
+  @keyframes slideUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .mob-rollo-idx { font-size:10px; color:var(--text3); width:16px; text-align:right; flex-shrink:0; }
+  .mob-rollo-num { font-family:'Space Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); flex:1; }
+  .mob-rollo-ok { font-size:9px; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(0,212,170,.1); color:var(--accent); }
+  .mob-rollo-del { background:none; border:none; color:var(--text3); font-size:14px; cursor:pointer; padding:0 3px; }
+  .mob-empty-list { text-align:center; padding:20px 0; color:var(--text3); font-size:12px; }
+  .mob-empty-icon { font-size:28px; display:block; margin-bottom:7px; opacity:.4; }
+
+  /* Confirm screen */
+  .mob-confirm-header {
+    background:linear-gradient(135deg,rgba(0,212,170,.1),rgba(0,153,255,.05));
+    border:1.5px solid rgba(0,212,170,.2);
+    border-radius:13px; padding:14px; margin-bottom:10px;
+  }
+  .mob-confirm-nv { font-family:'Space Mono',monospace; font-size:20px; font-weight:700; color:var(--accent); margin-bottom:3px; }
+  .mob-confirm-meta { font-size:10px; color:var(--text3); }
+  .mob-confirm-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:10px; }
+  .mob-confirm-stat { background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:10px; text-align:center; }
+  .mob-confirm-val { font-family:'Space Mono',monospace; font-size:22px; font-weight:700; }
+  .mob-confirm-lbl { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:.8px; margin-top:2px; }
+  .mob-confirm-rollos { display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto; margin-bottom:10px; }
+  .mob-confirm-rollos::-webkit-scrollbar { display:none; }
+  .mob-confirm-rollo {
+    display:flex; align-items:center; gap:7px;
+    padding:8px 10px; background:var(--surface);
+    border:1px solid var(--border); border-radius:7px;
+  }
+  .mob-cr-num { font-family:'Space Mono',monospace; font-size:11px; color:var(--accent); flex:1; font-weight:700; }
+  .mob-cr-zona { font-size:9px; color:var(--accent2); font-weight:700; background:rgba(0,153,255,.1); padding:2px 6px; border-radius:4px; }
+
+  /* Success screen */
+  .mob-success-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px 22px; text-align:center; flex:1; }
+  .mob-success-icon { width:76px; height:76px; border-radius:50%; background:rgba(0,212,170,.1); border:2px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:34px; margin-bottom:18px; box-shadow:0 0 36px rgba(0,212,170,.2); animation:popIn .4s ease; }
+  @keyframes popIn { from{transform:scale(.5);opacity:0} to{transform:scale(1);opacity:1} }
+  .mob-success-title { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:3px; color:var(--accent); margin-bottom:5px; }
+  .mob-success-sub { font-size:12px; color:var(--text2); line-height:1.5; margin-bottom:20px; }
+  .mob-success-summary { background:var(--surface); border:1px solid var(--border); border-radius:13px; padding:14px; width:100%; margin-bottom:16px; }
+  .mob-success-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); }
+  .mob-success-row:last-child { border:none; }
+  .mob-success-lbl { font-size:11px; color:var(--text3); }
+  .mob-success-val { font-size:12px; font-weight:700; color:var(--text); font-family:'Space Mono',monospace; }
+
+  /* Phone labels */
+  .phone-label {
+    text-align: center; margin-top: 16px;
+  }
+  .phone-label-title { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 2px; color: var(--text2); }
+  .phone-label-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* Mobile screen nav */
+  .mobile-screen-nav { display: flex; gap: 8px; padding: 0 20px; margin-bottom: 12px; flex-wrap: wrap; }
+  .msn-btn {
+    padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border2);
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    background: var(--surface2); color: var(--text2);
+    font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+  }
+  .msn-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  /* LOGIN SCREEN */
+  .login-screen { background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 32px 24px; }
+  .login-logo { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 4px; color: var(--accent); margin-bottom: 4px; }
+  .login-sub { font-size: 12px; color: var(--text3); margin-bottom: 36px; }
+  .login-label { font-size: 12px; color: var(--text2); margin-bottom: 16px; font-weight: 500; }
+  .pin-dots { display: flex; gap: 12px; margin-bottom: 28px; }
+  .pin-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border2); transition: all 0.2s;
+  }
+  .pin-dot.filled { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .pin-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; }
+  .pin-key {
+    aspect-ratio: 1; border-radius: 50%; border: none;
+    background: var(--surface2); color: var(--text);
+    font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pin-key:active { background: var(--accent); color: #000; transform: scale(0.95); }
+  .pin-key.empty { background: transparent; cursor: default; }
+  .pin-key.del { font-size: 14px; background: var(--surface); }
+  .operario-selector { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-bottom: 20px; }
+  .op-sel-item {
+    padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border2);
+    background: var(--surface2); display: flex; align-items: center; gap: 10px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .op-sel-item.selected { border-color: var(--accent); background: rgba(0,212,170,0.08); }
+  .op-sel-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--surface3); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .op-sel-name { font-size: 14px; font-weight: 600; color: var(--text); }
+
+  /* SCROLL FIX */
+  .mobile-content { scrollbar-width: none; }
+
+  /* ALERTS */
+  .alert-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px;
+  }
+  .alert-item.warn { border-left: 3px solid var(--warn); }
+  .alert-item.danger { border-left: 3px solid var(--danger); }
+  .alert-icon { font-size: 18px; }
+  .alert-text { font-size: 12px; color: var(--text); }
+  .alert-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* Responsive tweaks */
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .charts-row { grid-template-columns: 1fr; }
+    .operarios-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .sidebar { display: none; }
+    .kpi-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Tabs for PC pages */
+  .pc-nav-tabs { display: flex; gap: 2px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .pc-tab {
+    padding: 10px 20px; border: none; background: transparent;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+    color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: all 0.2s;
+  }
+  .pc-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .pc-tab:hover:not(.active) { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    WMS BODEGA
+  </div>
+  <div class="view-toggle">
+    <button class="toggle-btn active" onclick="switchView('pc')">🖥️ Panel PC</button>
+    <button class="toggle-btn" onclick="switchView('mobile')">📱 App Móvil</button>
+  </div>
+  <div style="font-size:12px; color:var(--text3); font-family:'Space Mono',monospace;">PROTOTIPO v1.0</div>
+</header>
+
+<div class="mobile-hint-bar">
+  📱 Vista móvil activa — usa el menú superior para navegar entre módulos
+</div>
+<div class="main">
+
+<!-- ═══════ PC VIEW ═══════ -->
+<div id="pc-view">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Principal</div>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <span class="nav-icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('inventario')">
+        <span class="nav-icon">📦</span> Inventario
+        <span class="nav-badge">73</span>
+      </div>
+      <div class="nav-item" onclick="showPage('movimientos')">
+        <span class="nav-icon">🔄</span> Movimientos
+      </div>
+      <div class="nav-item" onclick="showPage('documentos')">
+        <span class="nav-icon">📷</span> Documentos
+        <span class="nav-badge" style="background:var(--accent3)">3</span>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Gestión</div>
+      <div class="nav-item" onclick="showPage('operarios')">
+        <span class="nav-icon">👷</span> Operarios
+      </div>
+      <div class="nav-item" onclick="showPage('exportar')">
+        <span class="nav-icon">📥</span> Exportar
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Sistema</div>
+      <div class="nav-item" onclick="showPage('configuracion')">
+        <span class="nav-icon">⚙️</span> Configuración
+      </div>
+    </div>
+    <!-- Operarios online -->
+    <div style="padding: 16px; margin-top: auto; border-top: 1px solid var(--border); margin-top: 20px;">
+      <div class="sidebar-title" style="margin-bottom:10px">Operarios activos</div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)"></div> Juan Pérez
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div> Carlos López
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--border2)"></div> Pedro Díaz
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--border2)"></div> María González
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--border2)"></div> Luis Vásquez
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <div class="pc-content">
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="section-label">Panel de control</div>
+        <h1>DASHBOARD</h1>
+        <p>Miércoles 8 de enero, 2025 · Turno día · Actualizado hace 12 seg</p>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card green">
+          <div class="kpi-icon">🔄</div>
+          <div class="kpi-label">Movimientos hoy</div>
+          <div class="kpi-value">47</div>
+          <div class="kpi-sub">↑ 12 más que ayer</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon">📦</div>
+          <div class="kpi-label">Rollos en bodega</div>
+          <div class="kpi-value">284</div>
+          <div class="kpi-sub">En 5 zonas activas</div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="kpi-icon">🏭</div>
+          <div class="kpi-label">Despachos producción</div>
+          <div class="kpi-value">18</div>
+          <div class="kpi-sub">Último: hace 23 min</div>
+        </div>
+        <div class="kpi-card yellow">
+          <div class="kpi-icon">⚠️</div>
+          <div class="kpi-label">Alertas stock bajo</div>
+          <div class="kpi-value">3</div>
+          <div class="kpi-sub">Requieren atención</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <!-- Zone Map -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📍 Mapa de Zonas — Stock actual</span>
+            <span class="card-badge live">● EN VIVO</span>
+          </div>
+          <div class="zone-map">
+            <div class="zone-cell">
+              <div class="zone-name">Zona 1</div>
+              <div class="zone-count">82</div>
+              <div class="zone-label">rollos</div>
+              <div class="zone-bar"><div class="zone-bar-fill"></div></div>
+            </div>
+            <div class="zone-cell">
+              <div class="zone-name">Zona 2</div>
+              <div class="zone-count">51</div>
+              <div class="zone-label">rollos</div>
+              <div class="zone-bar"><div class="zone-bar-fill"></div></div>
+            </div>
+            <div class="zone-cell">
+              <div class="zone-name">Zona 3</div>
+              <div class="zone-count">98</div>
+              <div class="zone-label">rollos</div>
+              <div class="zone-bar"><div class="zone-bar-fill"></div></div>
+            </div>
+            <div class="zone-cell wide">
+              <div class="zone-name">Zona Carpa</div>
+              <div class="zone-count">34</div>
+              <div class="zone-label">rollos</div>
+              <div class="zone-bar"><div class="zone-bar-fill"></div></div>
+            </div>
+            <div class="zone-cell">
+              <div class="zone-name">Zona Loza</div>
+              <div class="zone-count">19</div>
+              <div class="zone-label">rollos</div>
+              <div class="zone-bar"><div class="zone-bar-fill"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚡ Actividad reciente</span>
+            <span class="card-badge live">● EN VIVO</span>
+          </div>
+          <div class="activity-feed">
+            <div class="activity-item">
+              <div class="activity-dot traslado"></div>
+              <div class="activity-info">
+                <div class="activity-main"><span class="tag traslado">Traslado</span> EH2626NNLR × 5 rollos</div>
+                <div class="activity-sub">Zona 1 → Zona 3 · Antigranizo 2,6x2,6</div>
+              </div>
+              <div class="activity-meta">
+                <div class="activity-time">08:47</div>
+                <div class="activity-op">Juan P.</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-dot entrada"></div>
+              <div class="activity-info">
+                <div class="activity-main"><span class="tag entrada">Entrada</span> EN2010KKSR × 20 rollos</div>
+                <div class="activity-sub">→ Zona 1 · Antiáfido 20x10 Kristal</div>
+              </div>
+              <div class="activity-meta">
+                <div class="activity-time">08:31</div>
+                <div class="activity-op">Carlos L.</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-dot produccion"></div>
+              <div class="activity-info">
+                <div class="activity-main"><span class="tag produccion">Producción</span> ES263KKLR × 8 rollos</div>
+                <div class="activity-sub">Zona Carpa → Producción</div>
+              </div>
+              <div class="activity-meta">
+                <div class="activity-time">08:15</div>
+                <div class="activity-op">Juan P.</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-dot traslado"></div>
+              <div class="activity-info">
+                <div class="activity-main"><span class="tag traslado">Traslado</span> EC100NNSR × 3 rollos</div>
+                <div class="activity-sub">Zona 2 → Zona Loza · Ground Cover</div>
+              </div>
+              <div class="activity-meta">
+                <div class="activity-time">07:58</div>
+                <div class="activity-op">Carlos L.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header"><span class="card-title">⚠️ Alertas de stock bajo</span></div>
+        <div class="alert-item warn">
+          <div class="alert-icon">📦</div>
+          <div>
+            <div class="alert-text"><strong>EF17BBSR</strong> — Manta Térmica Blanca/SR</div>
+            <div class="alert-sub">Stock actual: 2 rollos · Mínimo configurado: 5 · Zona Carpa</div>
+          </div>
+          <button class="btn btn-ghost" style="margin-left:auto;font-size:12px">Ver</button>
+        </div>
+        <div class="alert-item warn">
+          <div class="alert-icon">📦</div>
+          <div>
+            <div class="alert-text"><strong>AM55NNMR</strong> — Dormancia 5x5 Negra/MR</div>
+            <div class="alert-sub">Stock actual: 1 rollo · Mínimo configurado: 4 · Zona 2</div>
+          </div>
+          <button class="btn btn-ghost" style="margin-left:auto;font-size:12px">Ver</button>
+        </div>
+        <div class="alert-item danger">
+          <div class="alert-icon">🚨</div>
+          <div>
+            <div class="alert-text"><strong>NB14NNSR</strong> — Antipájaro Extruída 14Gr.</div>
+            <div class="alert-sub">Stock actual: 0 rollos · AGOTADO · Zona 3</div>
+          </div>
+          <button class="btn btn-primary" style="margin-left:auto;font-size:12px">Registrar entrada</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTARIO PAGE -->
+    <div class="page" id="page-inventario">
+      <div class="page-header">
+        <div class="section-label">Stock en tiempo real</div>
+        <h1>INVENTARIO</h1>
+        <p>73 artículos registrados · Distribuidos en 5 zonas</p>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:20px">
+        <input style="flex:1;padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none" placeholder="🔍  Buscar por código o descripción..." />
+        <select style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none">
+          <option>Todas las zonas</option>
+          <option>Zona 1</option><option>Zona 2</option><option>Zona 3</option>
+          <option>Zona Carpa</option><option>Zona Loza</option>
+        </select>
+        <select style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none">
+          <option>Todas las familias</option>
+          <option>Antigranizo</option><option>Antiáfido</option>
+          <option>Golpe de Sol</option><option>Cortaviento</option>
+        </select>
+      </div>
+      <div class="card">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Descripción</th>
+              <th>Familia</th>
+              <th>Zona</th>
+              <th>Stock</th>
+              <th>Último movimiento</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="code-tag">EH2626NNLR</span></td><td>Antigranizo 2,6x2,6 Negra/LR</td><td><span class="tag traslado">Antigranizo</span></td><td>Zona 1</td><td><span class="stock-num" style="color:var(--accent)">24</span></td><td style="color:var(--text3);font-size:12px">Hoy 08:47</td></tr>
+            <tr><td><span class="code-tag">EN2010KKSR</span></td><td>Antiáfido 20x10 Kristal/SR</td><td><span class="tag entrada">Antiáfido</span></td><td>Zona 1</td><td><span class="stock-num" style="color:var(--accent)">20</span></td><td style="color:var(--text3);font-size:12px">Hoy 08:31</td></tr>
+            <tr><td><span class="code-tag">ES263KKLR</span></td><td>Golpe de Sol 2,6x3 Kristal/LR</td><td><span class="tag produccion">Golpe de Sol</span></td><td>Zona Carpa</td><td><span class="stock-num" style="color:var(--warn)">6</span></td><td style="color:var(--text3);font-size:12px">Hoy 08:15</td></tr>
+            <tr><td><span class="code-tag">EC100NNSR</span></td><td>Ground Cover 100g Negro/SR</td><td><span class="tag" style="background:rgba(192,132,252,0.1);color:#c084fc">Ground Cover</span></td><td>Zona Loza</td><td><span class="stock-num" style="color:var(--accent)">15</span></td><td style="color:var(--text3);font-size:12px">Hoy 07:58</td></tr>
+            <tr><td><span class="code-tag">EW66KKCV</span></td><td>Cortaviento 6x6 Kristal/CV</td><td><span class="tag" style="background:rgba(251,146,60,0.1);color:#fb923c">Cortaviento</span></td><td>Zona 2</td><td><span class="stock-num" style="color:var(--accent)">11</span></td><td style="color:var(--text3);font-size:12px">Ayer</td></tr>
+            <tr><td><span class="code-tag">EF17BBSR</span></td><td>Manta Térmica Blanca/SR</td><td><span class="tag" style="background:rgba(96,165,250,0.1);color:#60a5fa">Otro</span></td><td>Zona Carpa</td><td><span class="stock-num" style="color:var(--warn)">2</span></td><td style="color:var(--text3);font-size:12px">Ayer</td></tr>
+            <tr><td><span class="code-tag">NB14NNSR</span></td><td>Antipájaro Extruída 14Gr.</td><td><span class="tag" style="background:rgba(96,165,250,0.1);color:#60a5fa">Antipájaro</span></td><td>Zona 3</td><td><span class="stock-num" style="color:var(--danger)">0</span></td><td style="color:var(--text3);font-size:12px">Hace 3 días</td></tr>
+            <tr><td><span class="code-tag">EH2626KKLR</span></td><td>Antigranizo 2,6x2,6 Kristal/LR</td><td><span class="tag traslado">Antigranizo</span></td><td>Zona 3</td><td><span class="stock-num" style="color:var(--accent)">33</span></td><td style="color:var(--text3);font-size:12px">Hoy 07:30</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MOVIMIENTOS PAGE -->
+    <div class="page" id="page-movimientos">
+      <div class="page-header">
+        <div class="section-label">Historial completo</div>
+        <h1>MOVIMIENTOS</h1>
+        <p>Registro de todos los movimientos de la bodega</p>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <input type="date" value="2025-01-08" style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none" />
+        <input type="date" value="2025-01-08" style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none" />
+        <select style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none">
+          <option>Todos los operarios</option>
+          <option>Juan Pérez</option><option>Carlos López</option>
+        </select>
+        <select style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none">
+          <option>Todos los tipos</option>
+          <option>Entrada</option><option>Traslado</option><option>Producción</option><option>Salida</option>
+        </select>
+        <button class="btn btn-primary">Filtrar</button>
+      </div>
+      <div class="card">
+        <table class="inv-table">
+          <thead>
+            <tr><th>Hora</th><th>Tipo</th><th>Código</th><th>Cantidad</th><th>Origen</th><th>Destino</th><th>Operario</th><th>Doc.</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style="font-family:'Space Mono',monospace;font-size:11px">08:47</td><td><span class="tag traslado">Traslado</span></td><td><span class="code-tag">EH2626NNLR</span></td><td>5 rollos</td><td style="color:var(--text2);font-size:12px">Zona 1</td><td style="color:var(--text2);font-size:12px">Zona 3</td><td style="color:var(--accent);font-size:12px">Juan P.</td><td>📷</td></tr>
+            <tr><td style="font-family:'Space Mono',monospace;font-size:11px">08:31</td><td><span class="tag entrada">Entrada</span></td><td><span class="code-tag">EN2010KKSR</span></td><td>20 rollos</td><td style="color:var(--text3);font-size:12px">—</td><td style="color:var(--text2);font-size:12px">Zona 1</td><td style="color:var(--accent);font-size:12px">Carlos L.</td><td>📷</td></tr>
+            <tr><td style="font-family:'Space Mono',monospace;font-size:11px">08:15</td><td><span class="tag produccion">Producción</span></td><td><span class="code-tag">ES263KKLR</span></td><td>8 rollos</td><td style="color:var(--text2);font-size:12px">Zona Carpa</td><td style="color:var(--text2);font-size:12px">Producción</td><td style="color:var(--accent);font-size:12px">Juan P.</td><td>—</td></tr>
+            <tr><td style="font-family:'Space Mono',monospace;font-size:11px">07:58</td><td><span class="tag traslado">Traslado</span></td><td><span class="code-tag">EC100NNSR</span></td><td>3 rollos</td><td style="color:var(--text2);font-size:12px">Zona 2</td><td style="color:var(--text2);font-size:12px">Zona Loza</td><td style="color:var(--accent);font-size:12px">Carlos L.</td><td>—</td></tr>
+            <tr><td style="font-family:'Space Mono',monospace;font-size:11px">07:30</td><td><span class="tag entrada">Entrada</span></td><td><span class="code-tag">EH2626KKLR</span></td><td>10 rollos</td><td style="color:var(--text3);font-size:12px">—</td><td style="color:var(--text2);font-size:12px">Zona 3</td><td style="color:var(--accent);font-size:12px">Juan P.</td><td>📷</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- OPERARIOS PAGE -->
+    <div class="page" id="page-operarios">
+      <div class="page-header">
+        <div class="section-label">Gestión de personal</div>
+        <h1>OPERARIOS</h1>
+        <p>5 operarios registrados · 2 activos ahora</p>
+      </div>
+      <div class="operarios-grid">
+        <div class="operario-card online">
+          <div class="operario-avatar">JP</div>
+          <div class="operario-name">Juan Pérez</div>
+          <div class="operario-role">Operario · Turno día</div>
+          <div class="operario-stats">
+            <div class="op-stat"><div class="op-stat-val">23</div><div class="op-stat-label">Hoy</div></div>
+            <div class="op-stat"><div class="op-stat-val">148</div><div class="op-stat-label">Semana</div></div>
+          </div>
+        </div>
+        <div class="operario-card online">
+          <div class="operario-avatar">CL</div>
+          <div class="operario-name">Carlos López</div>
+          <div class="operario-role">Operario · Turno día</div>
+          <div class="operario-stats">
+            <div class="op-stat"><div class="op-stat-val">19</div><div class="op-stat-label">Hoy</div></div>
+            <div class="op-stat"><div class="op-stat-val">132</div><div class="op-stat-label">Semana</div></div>
+          </div>
+        </div>
+        <div class="operario-card">
+          <div class="operario-avatar" style="opacity:0.5">PD</div>
+          <div class="operario-name" style="color:var(--text2)">Pedro Díaz</div>
+          <div class="operario-role">Operario · Día libre</div>
+          <div class="operario-stats">
+            <div class="op-stat"><div class="op-stat-val" style="color:var(--text3)">0</div><div class="op-stat-label">Hoy</div></div>
+            <div class="op-stat"><div class="op-stat-val" style="color:var(--text2)">97</div><div class="op-stat-label">Semana</div></div>
+          </div>
+        </div>
+        <div class="operario-card">
+          <div class="operario-avatar" style="opacity:0.5">MG</div>
+          <div class="operario-name" style="color:var(--text2)">María González</div>
+          <div class="operario-role">Operario · Fuera de turno</div>
+          <div class="operario-stats">
+            <div class="op-stat"><div class="op-stat-val" style="color:var(--text3)">0</div><div class="op-stat-label">Hoy</div></div>
+            <div class="op-stat"><div class="op-stat-val" style="color:var(--text2)">115</div><div class="op-stat-label">Semana</div></div>
+          </div>
+        </div>
+        <div class="operario-card">
+          <div class="operario-avatar" style="opacity:0.5">LV</div>
+          <div class="operario-name" style="color:var(--text2)">Luis Vásquez</div>
+          <div class="operario-role">Operario · Fuera de turno</div>
+          <div class="operario-stats">
+            <div class="op-stat"><div class="op-stat-val" style="color:var(--text3)">0</div><div class="op-stat-label">Hoy</div></div>
+            <div class="op-stat"><div class="op-stat-val" style="color:var(--text2)">88</div><div class="op-stat-label">Semana</div></div>
+          </div>
+        </div>
+        <div class="operario-card" style="border-style:dashed;display:flex;align-items:center;justify-content:center;cursor:pointer;min-height:160px" onclick="">
+          <div style="text-align:center;color:var(--text3)">
+            <div style="font-size:32px;margin-bottom:8px">+</div>
+            <div style="font-size:13px;font-weight:600">Agregar operario</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOCUMENTOS PAGE -->
+    <div class="page" id="page-documentos">
+      <div class="page-header">
+        <div class="section-label">Fotos de etiquetas</div>
+        <h1>DOCUMENTOS</h1>
+        <p>Etiquetas fotografiadas por los operarios</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer" onclick="">
+          <div style="height:140px;background:linear-gradient(135deg,#1a2235,#232f45);display:flex;align-items:center;justify-content:center;font-size:48px">🏷️</div>
+          <div style="padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+              <span class="code-tag">EH2626NNLR</span>
+              <span class="tag entrada">✓ OK</span>
+            </div>
+            <div style="font-size:12px;color:var(--text2)">Antigranizo 2,6x2,6 · Kristal/LR</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">Juan P. · Hoy 08:31</div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer">
+          <div style="height:140px;background:linear-gradient(135deg,#1a2235,#232f45);display:flex;align-items:center;justify-content:center;font-size:48px">🏷️</div>
+          <div style="padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+              <span class="code-tag">EN2010KKSR</span>
+              <span class="tag entrada">✓ OK</span>
+            </div>
+            <div style="font-size:12px;color:var(--text2)">Antiáfido 20x10 · Kristal/SR</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">Carlos L. · Hoy 08:15</div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer">
+          <div style="height:140px;background:linear-gradient(135deg,#1a2235,#232f45);display:flex;align-items:center;justify-content:center;font-size:48px">🏷️</div>
+          <div style="padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+              <span class="code-tag">???NNSR</span>
+              <span class="tag salida">⚠ Revisar</span>
+            </div>
+            <div style="font-size:12px;color:var(--text2)">OCR parcial · Requiere revisión</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">Juan P. · Hoy 07:50</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPORTAR PAGE -->
+    <div class="page" id="page-exportar">
+      <div class="page-header">
+        <div class="section-label">Reportes y exportación</div>
+        <h1>EXPORTAR</h1>
+        <p>Descarga de datos en Excel o CSV</p>
+      </div>
+      <div class="export-grid">
+        <div class="export-card">
+          <div class="export-icon">📊</div>
+          <div>
+            <div class="export-title">Movimientos del período</div>
+            <div class="export-desc">Historial completo filtrado por fecha, operario y tipo</div>
+          </div>
+        </div>
+        <div class="export-card">
+          <div class="export-icon">📦</div>
+          <div>
+            <div class="export-title">Inventario actual</div>
+            <div class="export-desc">Stock por zona y artículo al momento de la descarga</div>
+          </div>
+        </div>
+        <div class="export-card">
+          <div class="export-icon">👷</div>
+          <div>
+            <div class="export-title">Productividad operarios</div>
+            <div class="export-desc">Movimientos registrados por operario en el período</div>
+          </div>
+        </div>
+        <div class="export-card">
+          <div class="export-icon">📷</div>
+          <div>
+            <div class="export-title">Log de documentos</div>
+            <div class="export-desc">Registro de etiquetas escaneadas con datos extraídos</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Configurar exportación</span></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Desde</div>
+            <input type="date" value="2025-01-01" style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none" />
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Hasta</div>
+            <input type="date" value="2025-01-08" style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none" />
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Formato</div>
+            <select style="padding:10px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none">
+              <option>Excel (.xlsx)</option>
+              <option>CSV (.csv)</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" style="padding:10px 24px">⬇ Descargar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIGURACION PAGE -->
+    <div class="page" id="page-configuracion">
+      <div class="page-header">
+        <div class="section-label">Ajustes del sistema</div>
+        <h1>CONFIGURACIÓN</h1>
+        <p>Zonas, alertas y parámetros de la plataforma</p>
+      </div>
+      <div class="charts-row">
+        <div class="card">
+          <div class="card-header"><span class="card-title">📍 Zonas de bodega</span><button class="btn btn-primary" style="font-size:12px">+ Agregar zona</button></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+              <span style="font-weight:600;flex:1">Zona 1</span><span style="font-size:12px;color:var(--text3)">Antigranizo / Antiáfido</span>
+              <button class="btn btn-ghost" style="font-size:11px;margin-left:12px">Editar</button>
+            </div>
+            <div style="display:flex;align-items:center;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+              <span style="font-weight:600;flex:1">Zona 2</span><span style="font-size:12px;color:var(--text3)">Cortaviento / Saran</span>
+              <button class="btn btn-ghost" style="font-size:11px;margin-left:12px">Editar</button>
+            </div>
+            <div style="display:flex;align-items:center;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+              <span style="font-weight:600;flex:1">Zona 3</span><span style="font-size:12px;color:var(--text3)">Golpe de Sol</span>
+              <button class="btn btn-ghost" style="font-size:11px;margin-left:12px">Editar</button>
+            </div>
+            <div style="display:flex;align-items:center;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+              <span style="font-weight:600;flex:1">Zona Carpa</span><span style="font-size:12px;color:var(--text3)">Ground Cover / Manta</span>
+              <button class="btn btn-ghost" style="font-size:11px;margin-left:12px">Editar</button>
+            </div>
+            <div style="display:flex;align-items:center;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+              <span style="font-weight:600;flex:1">Zona Loza</span><span style="font-size:12px;color:var(--text3)">General / Varios</span>
+              <button class="btn btn-ghost" style="font-size:11px;margin-left:12px">Editar</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">⚠️ Alertas de mínimos</span></div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Configura el stock mínimo por artículo para recibir alertas</div>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input style="flex:1;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-size:13px;outline:none" placeholder="Buscar artículo..." />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:8px">
+              <span class="code-tag" style="margin-right:12px">EF17BBSR</span>
+              <span style="flex:1;font-size:12px;color:var(--text2)">Manta Térmica</span>
+              <input type="number" value="5" style="width:60px;padding:6px;border-radius:6px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);text-align:center;font-size:13px;outline:none" />
+            </div>
+            <div style="display:flex;align-items:center;padding:10px 12px;background:var(--surface2);border-radius:8px">
+              <span class="code-tag" style="margin-right:12px">NB14NNSR</span>
+              <span style="flex:1;font-size:12px;color:var(--text2)">Antipájaro Extruída</span>
+              <input type="number" value="3" style="width:60px;padding:6px;border-radius:6px;background:var(--surface3);border:1px solid var(--border2);color:var(--text);text-align:center;font-size:13px;outline:none" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MOBILE VIEW ═══════ -->
+<div id="mobile-view">
+
+  <!-- ══ PHONE ══ -->
+  <div>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+
+        <!-- ─ LOGIN ─ -->
+        <div class="mobile-screen active" id="mob-login">
+          <div class="login-screen">
+            <div class="login-logo">WMS</div>
+            <div class="login-sub">GESTIÓN DE BODEGA</div>
+            <div class="login-label">Selecciona tu perfil</div>
+            <div class="operario-selector">
+              <div class="op-sel-item" onclick="loginSelect(this,'operario','Juan Pérez')">
+                <div class="op-sel-avatar">👷</div>
+                <div style="flex:1"><div class="op-sel-name">Juan Pérez</div><div style="font-size:10px;color:var(--text3)">Operario</div></div>
+                <span class="role-badge operario">Operario</span>
+              </div>
+              <div class="op-sel-item" onclick="loginSelect(this,'operario','Carlos López')">
+                <div class="op-sel-avatar">👷</div>
+                <div style="flex:1"><div class="op-sel-name">Carlos López</div><div style="font-size:10px;color:var(--text3)">Operario</div></div>
+                <span class="role-badge operario">Operario</span>
+              </div>
+              <div class="op-sel-item" onclick="loginSelect(this,'supervisor','Pedro Díaz')">
+                <div class="op-sel-avatar">🦺</div>
+                <div style="flex:1"><div class="op-sel-name">Pedro Díaz</div><div style="font-size:10px;color:var(--text3)">Supervisor</div></div>
+                <span class="role-badge supervisor">Supervisor</span>
+              </div>
+              <div class="op-sel-item" onclick="loginSelect(this,'admin','María González')">
+                <div class="op-sel-avatar">👩‍💼</div>
+                <div style="flex:1"><div class="op-sel-name">María González</div><div style="font-size:10px;color:var(--text3)">Admin · Jefa de Bodega</div></div>
+                <span class="role-badge admin">Admin</span>
+              </div>
+            </div>
+            <div class="login-label">Ingresa tu PIN</div>
+            <div class="pin-dots">
+              <div class="pin-dot" id="pd1"></div>
+              <div class="pin-dot" id="pd2"></div>
+              <div class="pin-dot" id="pd3"></div>
+              <div class="pin-dot" id="pd4"></div>
+            </div>
+            <div class="pin-keypad">
+              <button class="pin-key" onclick="pinTap(1)">1</button>
+              <button class="pin-key" onclick="pinTap(2)">2</button>
+              <button class="pin-key" onclick="pinTap(3)">3</button>
+              <button class="pin-key" onclick="pinTap(4)">4</button>
+              <button class="pin-key" onclick="pinTap(5)">5</button>
+              <button class="pin-key" onclick="pinTap(6)">6</button>
+              <button class="pin-key" onclick="pinTap(7)">7</button>
+              <button class="pin-key" onclick="pinTap(8)">8</button>
+              <button class="pin-key" onclick="pinTap(9)">9</button>
+              <button class="pin-key empty"></button>
+              <button class="pin-key" onclick="pinTap(0)">0</button>
+              <button class="pin-key del" onclick="pinDel()">⌫</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─ HOME ─ -->
+        <div class="mobile-screen" id="mob-home">
+          <div class="mobile-status">
+            <div class="mobile-time" id="hm-time">09:14</div>
+            <div class="mobile-icons">📶 🔋</div>
+          </div>
+          <div class="mobile-header">
+            <div class="mobile-header-row">
+              <div>
+                <div class="mobile-title" id="hm-saludo">HOLA</div>
+                <div class="mobile-subtitle" id="hm-role-sub">Turno día</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <div class="mobile-avatar" id="hm-avatar">?</div>
+                <span class="role-badge operario" id="hm-role-badge">Operario</span>
+              </div>
+            </div>
+          </div>
+          <div class="mobile-content">
+            <!-- Acciones comunes a todos -->
+            <div class="mobile-actions">
+              <div class="mobile-action-btn primary" onclick="ingreso_reset();showMobScreen('mob-ing1')">
+                <span class="mac-icon">📥</span>
+                <span class="mac-label">Ingreso a bodega</span>
+              </div>
+              <div class="mobile-action-btn secondary" onclick="traslado_reset();showMobScreen('mob-tra1')">
+                <span class="mac-icon">🔄</span>
+                <span class="mac-label">Traslado zona</span>
+              </div>
+              <div class="mobile-action-btn wide" onclick="despacho_reset();showMobScreen('mob-des1')">
+                <span class="mac-icon">✂️</span>
+                <div>
+                  <div class="mac-label">Despacho Costura / Plegado</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Enviar rollos a proceso especial</div>
+                </div>
+                <span style="margin-left:auto;color:var(--text3)">›</span>
+              </div>
+              <div class="mobile-action-btn wide" onclick="showMobScreen('mob-historial')" style="grid-column:span 2">
+                <span class="mac-icon">📋</span>
+                <div>
+                  <div class="mac-label">Mi historial</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px" id="hm-hist-sub">Registros del turno</div>
+                </div>
+                <span style="margin-left:auto;color:var(--text3)">›</span>
+              </div>
+            </div>
+
+            <!-- Acciones solo supervisor/admin -->
+            <div id="hm-sup-section" style="display:none">
+              <div class="mobile-section-title" style="color:var(--warn)">⚡ Acciones Supervisor</div>
+              <div class="mobile-action-btn wide" onclick="ingreso_reset();ingreso.modo='proveedor';showMobScreen('mob-ing1')" style="border-color:rgba(255,179,71,0.3);margin-bottom:8px">
+                <span class="mac-icon">🚚</span>
+                <div>
+                  <div class="mac-label">Ingreso desde Proveedor</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Con guía de despacho · Solo supervisor</div>
+                </div>
+                <span style="margin-left:auto;color:var(--warn)">›</span>
+              </div>
+              <div class="mobile-action-btn wide" onclick="showMobScreen('mob-dashboard')" style="border-color:rgba(0,212,170,0.2)">
+                <span class="mac-icon">📊</span>
+                <div>
+                  <div class="mac-label">Dashboard stock</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Ver inventario en tiempo real</div>
+                </div>
+                <span style="margin-left:auto;color:var(--accent)">›</span>
+              </div>
+            </div>
+
+            <div class="mobile-section-title" style="margin-top:12px">Actividad reciente</div>
+            <div class="mobile-movement">
+              <div class="mobile-mov-icon traslado">🔄</div>
+              <div><div class="mobile-mov-main">EH2626NNLR · 5 rollos</div><div class="mobile-mov-sub">Zona 1 → Zona 3</div></div>
+              <div class="mobile-mov-time">08:47</div>
+            </div>
+            <div class="mobile-movement">
+              <div class="mobile-mov-icon entrada">📥</div>
+              <div><div class="mobile-mov-main">EN2010KKSR · 20 rollos</div><div class="mobile-mov-sub">Ingreso desde Tejeduría → Zona 1</div></div>
+              <div class="mobile-mov-time">08:31</div>
+            </div>
+            <div class="mobile-movement">
+              <div class="mobile-mov-icon produccion">✂️</div>
+              <div><div class="mobile-mov-main">ES263KKLR · 8 rollos</div><div class="mobile-mov-sub">Despacho → Costura-Plegado</div></div>
+              <div class="mobile-mov-time">08:15</div>
+            </div>
+          </div>
+          <div class="mobile-bottom-nav">
+            <div class="mobile-nav-item active" onclick="showMobScreen('mob-home')"><div class="mobile-nav-icon">🏠</div><div class="mobile-nav-label">Inicio</div></div>
+            <div class="mobile-nav-item" onclick="ingreso_reset();showMobScreen('mob-ing1')"><div class="mobile-nav-icon">📥</div><div class="mobile-nav-label">Ingreso</div></div>
+            <div class="mobile-nav-item" onclick="traslado_reset();showMobScreen('mob-tra1')"><div class="mobile-nav-icon">🔄</div><div class="mobile-nav-label">Traslado</div></div>
+            <div class="mobile-nav-item" onclick="showMobScreen('mob-historial')"><div class="mobile-nav-icon">📋</div><div class="mobile-nav-label">Historial</div></div>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             INGRESO — PASO 1: CABECERA
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-ing1" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:17</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-home')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">NUEVO INGRESO</div>
+              </div>
+            </div>
+            <!-- Steps -->
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle active" id="ic1">1</div><div class="ing-step-lbl active">Cabecera</div></div>
+              <div class="ing-line" id="il1"></div>
+              <div class="ing-step"><div class="ing-circle" id="ic2">2</div><div class="ing-step-lbl" id="il2lbl">Rollos</div></div>
+              <div class="ing-line" id="il2"></div>
+              <div class="ing-step"><div class="ing-circle" id="ic3">3</div><div class="ing-step-lbl" id="il3lbl">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px">
+            <!-- Origen del ingreso -->
+            <div class="ing-card">
+              <div class="ing-card-label">📌 Origen del ingreso</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:0" id="ing-origen-grid">
+                <div class="ing-type-card" onclick="ingreso_setOrigen(this,'tejeduria')" id="iot-tej">
+                  <div class="ing-type-icon">🧵</div>
+                  <div class="ing-type-label">Tejeduría</div>
+                  <div class="ing-type-sub">Rollo fabricado interno</div>
+                  <span class="ing-type-badge op">Operario</span>
+                </div>
+                <div class="ing-type-card" onclick="ingreso_setOrigen(this,'costura')" id="iot-cos">
+                  <div class="ing-type-icon">✂️</div>
+                  <div class="ing-type-label">Costura / Plegado</div>
+                  <div class="ing-type-sub">Rollo con nuevo ID</div>
+                  <span class="ing-type-badge op">Operario</span>
+                </div>
+                <div class="ing-type-card" id="iot-pro" style="grid-column:span 2;display:none" onclick="ingreso_setOrigen(this,'proveedor')">
+                  <div class="ing-type-icon">🚚</div>
+                  <div class="ing-type-label">Proveedor Externo</div>
+                  <div class="ing-type-sub">Llega en camión con guía de despacho</div>
+                  <span class="ing-type-badge sup">Solo Supervisor</span>
+                </div>
+              </div>
+            </div>
+            <!-- Documento referencia (cambia según origen) -->
+            <div class="ing-card" id="ing-doc-card">
+              <div class="ing-card-label" id="ing-doc-label">🧾 Referencia</div>
+              <input class="nv-input-mob" id="nvInput" placeholder="Ej: NV-2025-001234" maxlength="20" oninput="ingreso_checkStep1()" />
+              <div style="font-size:10px;color:var(--text3);margin-top:6px" id="ing-doc-hint">N° de nota de venta o referencia interna</div>
+            </div>
+            <!-- Cantidad esperada -->
+            <div class="ing-card">
+              <div class="ing-card-label">🔢 Rollos esperados <span style="color:var(--text3);font-weight:400;letter-spacing:0;text-transform:none;font-size:9px">(opcional)</span></div>
+              <input class="nv-input-mob" id="cantEsperada" type="number" placeholder="¿Cuántos rollos vienen?" min="1" max="999" style="font-size:16px;letter-spacing:0" oninput="ingreso_checkStep1()" />
+            </div>
+            <!-- Producto -->
+            <div class="ing-card">
+              <div class="ing-card-label">📦 Producto</div>
+              <div id="prodSelectorMob">
+                <input class="prod-search-mob" id="prodSearchMob" placeholder="🔍 Buscar código o nombre..." oninput="ingreso_filterProds()" />
+                <div class="prod-list-mob" id="prodListMob"></div>
+              </div>
+              <div id="prodSelectedMob" style="display:none">
+                <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(0,153,255,0.06);border:1.5px solid rgba(0,153,255,0.25);border-radius:10px;padding:11px 13px">
+                  <div style="flex:1">
+                    <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--accent2);margin-bottom:2px" id="selCodeMob"></div>
+                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:1px" id="selNameMob"></div>
+                    <div style="font-size:10px;color:var(--text3)" id="selDetailMob"></div>
+                  </div>
+                  <button onclick="ingreso_changeProd()" style="font-size:10px;color:var(--text3);background:var(--surface3);border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;flex-shrink:0">Cambiar</button>
+                </div>
+              </div>
+            </div>
+            <!-- Zona destino -->
+            <div class="ing-card">
+              <div class="ing-card-label">📍 Zona de destino</div>
+              <div class="zona-grid-mob">
+                <div class="zona-btn-mob" onclick="ingreso_selectZona(this,'Zona 1')">🏷️ Zona 1</div>
+                <div class="zona-btn-mob" onclick="ingreso_selectZona(this,'Zona 2')">🏷️ Zona 2</div>
+                <div class="zona-btn-mob" onclick="ingreso_selectZona(this,'Zona 3')">🏷️ Zona 3</div>
+                <div class="zona-btn-mob" onclick="ingreso_selectZona(this,'Zona Carpa')">⛺ Zona Carpa</div>
+                <div class="zona-btn-mob" onclick="ingreso_selectZona(this,'Zona Loza')" style="grid-column:span 2">🏗️ Zona Loza</div>
+              </div>
+            </div>
+            <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent);color:#000;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;opacity:0.4;pointer-events:none" id="ing1NextBtn" onclick="ingreso_goToStep2()">
+              Continuar → Escanear rollos
+            </button>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             INGRESO — PASO 2: ESCANEO DE ROLLOS
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-ing2" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:22</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-ing1')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">ESCANEAR ROLLOS</div>
+                <div style="font-size:10px;color:var(--text3)" id="s2subtitle">NV · Producto · Zona</div>
+              </div>
+            </div>
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Cabecera</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle active">2</div><div class="ing-step-lbl active">Rollos</div></div>
+              <div class="ing-line" id="il2b"></div>
+              <div class="ing-step"><div class="ing-circle" id="ic3b">3</div><div class="ing-step-lbl" id="il3blbl">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;padding:0 16px 16px;overflow:hidden">
+            <!-- Counters -->
+            <div class="scan-counter-strip">
+              <div class="scan-counter-box">
+                <div class="scan-counter-val green" id="cEsc">0</div>
+                <div class="scan-counter-lbl">Escaneados</div>
+              </div>
+              <div class="scan-counter-box">
+                <div class="scan-counter-val" style="color:var(--accent2)" id="cEsp">—</div>
+                <div class="scan-counter-lbl">Esperados</div>
+              </div>
+              <div class="scan-counter-box">
+                <div class="scan-counter-val" style="color:var(--accent3)" id="cPend">—</div>
+                <div class="scan-counter-lbl">Pendientes</div>
+              </div>
+            </div>
+            <!-- Scan input -->
+            <div class="scan-input-box" id="scanBox2">
+              <div class="scan-row">
+                <input class="scan-field" id="scanField" placeholder="ID del rollo..." onkeydown="if(event.key==='Enter')ingreso_addRollo()" oninput="document.getElementById('scanBox2').classList.toggle('hot',this.value.length>0)" />
+                <button class="scan-cam-btn" title="Cámara">📷</button>
+                <button class="scan-add-btn" onclick="ingreso_addRollo()">+</button>
+              </div>
+              <div class="scan-hint-mob" id="scanHint2">Escribe o escanea el ID de cada rollo y presiona +</div>
+            </div>
+            <!-- List header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Rollos ingresados</div>
+              <div style="font-size:10px;color:var(--text3)" id="rollosCountMob"></div>
+            </div>
+            <!-- Rollos list -->
+            <div class="rollos-list-mob" id="rollosListMob">
+              <div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px">
+                <div style="font-size:28px;opacity:.3;margin-bottom:6px">📦</div>
+                Aún no hay rollos escaneados
+              </div>
+            </div>
+            <div style="margin-top:10px">
+              <button style="width:100%;padding:14px;border-radius:13px;border:none;background:var(--accent);color:#000;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;opacity:0.4;pointer-events:none" id="ing2NextBtn" onclick="ingreso_goToStep3()">
+                Ver resumen y confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             INGRESO — PASO 3: CONFIRMACIÓN
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-ing3" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:28</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-ing2')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">CONFIRMAR</div>
+                <div style="font-size:10px;color:var(--text3)">Revisa antes de guardar</div>
+              </div>
+            </div>
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Cabecera</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Rollos</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle active">3</div><div class="ing-step-lbl active">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px">
+            <div class="confirm-header-mob">
+              <div style="font-family:'Space Mono',monospace;font-size:20px;font-weight:700;color:var(--accent);margin-bottom:3px" id="conf_nv">—</div>
+              <div style="font-size:10px;color:var(--text3)" id="conf_meta">Producto · Zona · Operario</div>
+            </div>
+            <div class="confirm-grid-mob">
+              <div class="confirm-stat-mob">
+                <div class="confirm-stat-val" id="conf_total" style="color:var(--accent)">0</div>
+                <div class="confirm-stat-lbl">Rollos</div>
+              </div>
+              <div class="confirm-stat-mob">
+                <div class="confirm-stat-val" id="conf_zona" style="color:var(--accent2);font-size:13px;padding-top:5px">—</div>
+                <div class="confirm-stat-lbl">Zona destino</div>
+              </div>
+            </div>
+            <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px">Detalle de rollos</div>
+            <div class="confirm-rollos-mob" id="conf_rollos"></div>
+            <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent);color:#000;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px" onclick="ingreso_guardar()">
+              ✓ Guardar ingreso
+            </button>
+            <button style="width:100%;padding:12px;border-radius:13px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer" onclick="showMobScreen('mob-ing2')">
+              ← Volver a editar
+            </button>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             INGRESO — ÉXITO
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-ing-ok" style="background:var(--bg)">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center;height:100%">
+            <div style="width:80px;height:80px;border-radius:50%;background:rgba(0,212,170,0.1);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:18px;box-shadow:0 0 40px rgba(0,212,170,.2);animation:popIn .4s ease">✓</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:3px;color:var(--accent);margin-bottom:6px">INGRESO GUARDADO</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:22px" id="ok_sub">Rollos registrados y stock actualizado.</div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px;width:100%;margin-bottom:18px">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:11px;color:var(--text3)">Nota de Venta</span>
+                <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--accent)" id="ok_nv">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:11px;color:var(--text3)">Producto</span>
+                <span style="font-size:12px;font-weight:600;color:var(--text)" id="ok_prod">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:11px;color:var(--text3)">Rollos ingresados</span>
+                <span style="font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--accent)" id="ok_count">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0">
+                <span style="font-size:11px;color:var(--text3)">Zona</span>
+                <span style="font-size:12px;font-weight:700;color:var(--accent2)" id="ok_zona">—</span>
+              </div>
+            </div>
+            <button style="width:100%;padding:14px;border-radius:13px;border:none;background:var(--accent);color:#000;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px" onclick="ingreso_reset();showMobScreen('mob-ing1')">
+              + Nuevo ingreso
+            </button>
+            <button style="width:100%;padding:12px;border-radius:13px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer" onclick="showMobScreen('mob-home')">
+              ← Volver al inicio
+            </button>
+          </div>
+        </div>
+
+
+        <!-- ══════════════════════════════════════
+             TRASLADO — PASO 1: ORIGEN & DESTINO
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-tra1" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:30</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-home')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">TRASLADO</div>
+                <div style="font-size:10px;color:var(--text3)">Mover rollos entre zonas</div>
+              </div>
+            </div>
+            <!-- Steps -->
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle active" id="trc1">1</div><div class="ing-step-lbl active" id="trl1">Zonas</div></div>
+              <div class="ing-line" id="trline1"></div>
+              <div class="ing-step"><div class="ing-circle" id="trc2">2</div><div class="ing-step-lbl" id="trl2">Rollos</div></div>
+              <div class="ing-line" id="trline2"></div>
+              <div class="ing-step"><div class="ing-circle" id="trc3">3</div><div class="ing-step-lbl" id="trl3">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px">
+            <!-- Zona Origen -->
+            <div class="ing-card">
+              <div class="ing-card-label">📤 Zona de origen</div>
+              <div class="zona-grid-mob" id="tr_origen_grid">
+                <div class="zona-btn-mob" onclick="traslado_selectOrigen(this,'Zona 1')">🏷️ Zona 1</div>
+                <div class="zona-btn-mob" onclick="traslado_selectOrigen(this,'Zona 2')">🏷️ Zona 2</div>
+                <div class="zona-btn-mob" onclick="traslado_selectOrigen(this,'Zona 3')">🏷️ Zona 3</div>
+                <div class="zona-btn-mob" onclick="traslado_selectOrigen(this,'Zona Carpa')">⛺ Zona Carpa</div>
+                <div class="zona-btn-mob" onclick="traslado_selectOrigen(this,'Zona Loza')" style="grid-column:span 2">🏗️ Zona Loza</div>
+              </div>
+            </div>
+            <!-- Zona Destino -->
+            <div class="ing-card">
+              <div class="ing-card-label">📥 Zona de destino</div>
+              <div class="zona-grid-mob" id="tr_destino_grid">
+                <div class="zona-btn-mob" onclick="traslado_selectDestino(this,'Zona 1')">🏷️ Zona 1</div>
+                <div class="zona-btn-mob" onclick="traslado_selectDestino(this,'Zona 2')">🏷️ Zona 2</div>
+                <div class="zona-btn-mob" onclick="traslado_selectDestino(this,'Zona 3')">🏷️ Zona 3</div>
+                <div class="zona-btn-mob" onclick="traslado_selectDestino(this,'Zona Carpa')">⛺ Zona Carpa</div>
+                <div class="zona-btn-mob" onclick="traslado_selectDestino(this,'Zona Loza')" style="grid-column:span 2">🏗️ Zona Loza</div>
+              </div>
+              <!-- Alerta zonas iguales -->
+              <div id="tr_same_warn" style="display:none;margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,179,71,0.1);border:1px solid rgba(255,179,71,0.3);font-size:11px;color:var(--warn)">⚠️ Origen y destino no pueden ser iguales</div>
+            </div>
+            <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent);color:#000;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;opacity:0.4;pointer-events:none" id="tra1NextBtn" onclick="traslado_goToStep2()">
+              Continuar → Escanear rollos
+            </button>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             TRASLADO — PASO 2: ESCANEO DE ROLLOS
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-tra2" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:33</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-tra1')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">ESCANEAR ROLLOS</div>
+                <div style="font-size:10px;color:var(--text3)" id="tr_s2sub">Origen → Destino</div>
+              </div>
+            </div>
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Zonas</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle active">2</div><div class="ing-step-lbl active">Rollos</div></div>
+              <div class="ing-line" id="trline2b"></div>
+              <div class="ing-step"><div class="ing-circle" id="trc3b">3</div><div class="ing-step-lbl" id="trl3b">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;padding:0 16px 16px;overflow:hidden">
+            <!-- Counters -->
+            <div class="scan-counter-strip">
+              <div class="scan-counter-box">
+                <div class="scan-counter-val" style="color:var(--accent2)" id="tr_cEsc">0</div>
+                <div class="scan-counter-lbl">Seleccionados</div>
+              </div>
+              <div class="scan-counter-box">
+                <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--accent);padding-top:4px" id="tr_ori_mini">—</div>
+                <div class="scan-counter-lbl">Desde</div>
+              </div>
+              <div class="scan-counter-box">
+                <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--accent2);padding-top:4px" id="tr_des_mini">—</div>
+                <div class="scan-counter-lbl">Hacia</div>
+              </div>
+            </div>
+            <!-- Scan input -->
+            <div class="scan-input-box" id="tr_scanBox">
+              <div class="scan-row">
+                <input class="scan-field" id="tr_scanField" placeholder="ID del rollo..." onkeydown="if(event.key==='Enter')traslado_addRollo()" oninput="document.getElementById('tr_scanBox').classList.toggle('hot',this.value.length>0)" />
+                <button class="scan-cam-btn" title="Cámara">📷</button>
+                <button class="scan-add-btn" onclick="traslado_addRollo()">+</button>
+              </div>
+              <div class="scan-hint-mob" id="tr_scanHint">Escribe o escanea el ID de cada rollo y presiona +</div>
+            </div>
+            <!-- List header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Rollos a trasladar</div>
+              <div style="font-size:10px;color:var(--text3)" id="tr_rollosCount"></div>
+            </div>
+            <!-- Rollos list -->
+            <div class="rollos-list-mob" id="tr_rollosList">
+              <div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px">
+                <div style="font-size:28px;opacity:.3;margin-bottom:6px">🔄</div>
+                Aún no hay rollos seleccionados
+              </div>
+            </div>
+            <div style="margin-top:10px">
+              <button style="width:100%;padding:14px;border-radius:13px;border:none;background:var(--accent);color:#000;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;opacity:0.4;pointer-events:none" id="tra2NextBtn" onclick="traslado_goToStep3()">
+                Ver resumen y confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             TRASLADO — PASO 3: CONFIRMACIÓN
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-tra3" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:38</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-tra2')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">CONFIRMAR</div>
+                <div style="font-size:10px;color:var(--text3)">Revisa antes de ejecutar</div>
+              </div>
+            </div>
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Zonas</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Rollos</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle active">3</div><div class="ing-step-lbl active">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px">
+            <!-- Header card con flecha Origen → Destino -->
+            <div style="background:linear-gradient(135deg,rgba(0,153,255,0.1),rgba(0,212,170,0.05));border:1.5px solid rgba(0,153,255,0.2);border-radius:13px;padding:14px;margin-bottom:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="text-align:center;flex:1">
+                  <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Desde</div>
+                  <div style="font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--accent)" id="tr_conf_ori">—</div>
+                </div>
+                <div style="font-size:22px;opacity:0.6;padding:0 8px">→</div>
+                <div style="text-align:center;flex:1">
+                  <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Hacia</div>
+                  <div style="font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--accent2)" id="tr_conf_des">—</div>
+                </div>
+              </div>
+            </div>
+            <div class="confirm-grid-mob">
+              <div class="confirm-stat-mob">
+                <div class="confirm-stat-val" id="tr_conf_total" style="color:var(--accent)">0</div>
+                <div class="confirm-stat-lbl">Rollos</div>
+              </div>
+              <div class="confirm-stat-mob">
+                <div style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--warn);padding-top:7px" id="tr_conf_op">Juan Pérez</div>
+                <div class="confirm-stat-lbl">Operario</div>
+              </div>
+            </div>
+            <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px">Detalle de rollos</div>
+            <div class="confirm-rollos-mob" id="tr_conf_rollos"></div>
+            <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent2);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px" onclick="traslado_guardar()">
+              🔄 Ejecutar traslado
+            </button>
+            <button style="width:100%;padding:12px;border-radius:13px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer" onclick="showMobScreen('mob-tra2')">
+              ← Volver a editar
+            </button>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+             TRASLADO — ÉXITO
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-tra-ok" style="background:var(--bg)">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center;height:100%">
+            <div style="width:80px;height:80px;border-radius:50%;background:rgba(0,153,255,0.12);border:2px solid var(--accent2);display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:18px;box-shadow:0 0 40px rgba(0,153,255,.2);animation:popIn .4s ease">✓</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:var(--accent2);margin-bottom:6px">TRASLADO REALIZADO</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:22px" id="tr_ok_sub">Rollos movidos correctamente.</div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px;width:100%;margin-bottom:18px">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:11px;color:var(--text3)">Desde</span>
+                <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--accent)" id="tr_ok_ori">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+                <span style="font-size:11px;color:var(--text3)">Hacia</span>
+                <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--accent2)" id="tr_ok_des">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0">
+                <span style="font-size:11px;color:var(--text3)">Rollos trasladados</span>
+                <span style="font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--accent)" id="tr_ok_count">—</span>
+              </div>
+            </div>
+            <button style="width:100%;padding:14px;border-radius:13px;border:none;background:var(--accent2);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px" onclick="traslado_reset();showMobScreen('mob-tra1')">
+              + Nuevo traslado
+            </button>
+            <button style="width:100%;padding:12px;border-radius:13px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer" onclick="showMobScreen('mob-home')">
+              ← Volver al inicio
+            </button>
+          </div>
+        </div>
+
+
+        <!-- ══════════════════════════════════════
+             DESPACHO A COSTURA / PLEGADO — PASO 1
+        ═══════════════════════════════════════ -->
+        <div class="mobile-screen" id="mob-des1" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:35</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-home')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">DESPACHO PROCESO</div>
+                <div style="font-size:10px;color:var(--text3)">Envío a Costura o Plegado</div>
+              </div>
+            </div>
+            <!-- Steps -->
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle active">1</div><div class="ing-step-lbl active">Destino</div></div>
+              <div class="ing-line"></div>
+              <div class="ing-step"><div class="ing-circle" id="des-ic2">2</div><div class="ing-step-lbl" id="des-il2">Rollos</div></div>
+              <div class="ing-line"></div>
+              <div class="ing-step"><div class="ing-circle" id="des-ic3">3</div><div class="ing-step-lbl" id="des-il3">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px">
+            <!-- Tipo proceso -->
+            <div class="ing-card">
+              <div class="ing-card-label">✂️ Tipo de proceso</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="despacho-card" onclick="despacho_setTipo(this,'costura')" id="des-costura">
+                  <div class="despacho-icon">🪡</div>
+                  <div>
+                    <div class="despacho-label">Costura</div>
+                    <div class="despacho-sub">Une 2+ rollos en ancho mayor</div>
+                  </div>
+                </div>
+                <div class="despacho-card" onclick="despacho_setTipo(this,'plegado')" id="des-plegado">
+                  <div class="despacho-icon">📐</div>
+                  <div>
+                    <div class="despacho-label">Plegado</div>
+                    <div class="despacho-sub">Reduce ancho para transporte</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Zona origen -->
+            <div class="ing-card">
+              <div class="ing-card-label">📍 Zona origen (desde dónde salen)</div>
+              <div class="zona-grid-mob" id="des-zona-grid">
+                <div class="zona-btn-mob" onclick="despacho_setZona(this,'Zona 1')">🏷️ Zona 1</div>
+                <div class="zona-btn-mob" onclick="despacho_setZona(this,'Zona 2')">🏷️ Zona 2</div>
+                <div class="zona-btn-mob" onclick="despacho_setZona(this,'Zona 3')">🏷️ Zona 3</div>
+                <div class="zona-btn-mob" onclick="despacho_setZona(this,'Zona Carpa')">⛺ Zona Carpa</div>
+                <div class="zona-btn-mob" onclick="despacho_setZona(this,'Zona Loza')" style="grid-column:span 2">🏗️ Zona Loza</div>
+              </div>
+            </div>
+            <!-- Referencia orden -->
+            <div class="ing-card">
+              <div class="ing-card-label">📋 N° Orden (opcional)</div>
+              <input class="nv-input-mob" id="desOrden" placeholder="Ej: ORD-2025-089" maxlength="20" style="font-size:15px;letter-spacing:0" oninput="despacho_checkStep1()" />
+            </div>
+            <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent3);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;opacity:0.4;pointer-events:none;transition:all .2s" id="des1NextBtn" onclick="despacho_goToStep2()">
+              Continuar → Seleccionar rollos
+            </button>
+          </div>
+        </div>
+
+        <!-- ══ DESPACHO PASO 2: ROLLOS ══ -->
+        <div class="mobile-screen" id="mob-des2" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:38</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-des1')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">SELECCIONAR ROLLOS</div>
+                <div style="font-size:10px;color:var(--text3)" id="des-s2-sub">Proceso · Zona</div>
+              </div>
+            </div>
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Destino</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle active">2</div><div class="ing-step-lbl active">Rollos</div></div>
+              <div class="ing-line"></div>
+              <div class="ing-step"><div class="ing-circle">3</div><div class="ing-step-lbl">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;padding:0 16px 16px;overflow:hidden">
+            <div class="scan-counter-strip" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
+              <div class="scan-counter-box">
+                <div class="scan-counter-val" id="des-cEsc" style="color:var(--accent3)">0</div>
+                <div class="scan-counter-lbl">Seleccionados</div>
+              </div>
+              <div class="scan-counter-box">
+                <div class="scan-counter-val" id="des-cRollos" style="color:var(--text2)">—</div>
+                <div class="scan-counter-lbl">Total a enviar</div>
+              </div>
+            </div>
+            <div class="scan-input-box" id="des-scanBox">
+              <div class="scan-row">
+                <input class="scan-field" id="des-scanField" placeholder="ID del rollo a despachar..." onkeydown="if(event.key==='Enter')despacho_addRollo()" oninput="document.getElementById('des-scanBox').classList.toggle('hot',this.value.length>0)" />
+                <button class="scan-cam-btn">📷</button>
+                <button class="scan-add-btn" style="background:var(--accent3)" onclick="despacho_addRollo()">+</button>
+              </div>
+              <div class="scan-hint-mob" id="des-scanHint">Escanea o escribe el ID de cada rollo</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Rollos a despachar</div>
+              <div style="font-size:10px;color:var(--text3)" id="des-rollosCount"></div>
+            </div>
+            <div class="rollos-list-mob" id="des-rollosList">
+              <div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px"><div style="font-size:28px;opacity:.3;margin-bottom:6px">✂️</div>Aún no hay rollos seleccionados</div>
+            </div>
+            <div style="padding-top:8px;flex-shrink:0">
+              <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent3);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;opacity:0.4;pointer-events:none" id="des2NextBtn" onclick="despacho_goToStep3()">
+                Ver resumen y confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ DESPACHO PASO 3: CONFIRMAR ══ -->
+        <div class="mobile-screen" id="mob-des3" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:41</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 10px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-des2')">‹</button>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">CONFIRMAR DESPACHO</div>
+            </div>
+            <div class="ing-steps">
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Destino</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle done">✓</div><div class="ing-step-lbl">Rollos</div></div>
+              <div class="ing-line done"></div>
+              <div class="ing-step"><div class="ing-circle active">3</div><div class="ing-step-lbl active">Confirmar</div></div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 16px">
+            <div style="background:linear-gradient(135deg,rgba(255,107,53,0.1),rgba(255,107,53,0.03));border:1.5px solid rgba(255,107,53,0.25);border-radius:13px;padding:14px;margin-bottom:10px">
+              <div style="font-size:11px;color:var(--accent3);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px" id="des-conf-tipo-lbl">COSTURA</div>
+              <div style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px" id="des-conf-orden">Sin orden asignada</div>
+              <div style="font-size:10px;color:var(--text3)" id="des-conf-meta">Desde zona · Operario</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+              <div class="confirm-stat-mob"><div class="confirm-stat-val" id="des-conf-total" style="color:var(--accent3)">0</div><div class="confirm-stat-lbl">Rollos</div></div>
+              <div class="confirm-stat-mob"><div class="confirm-stat-val" id="des-conf-zona" style="color:var(--text2);font-size:12px;padding-top:6px">—</div><div class="confirm-stat-lbl">Zona origen</div></div>
+            </div>
+            <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px">Rollos a despachar</div>
+            <div class="confirm-rollos-mob" id="des-conf-rollos"></div>
+            <button style="width:100%;padding:15px;border-radius:13px;border:none;background:var(--accent3);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px" onclick="despacho_guardar()">
+              ✓ Confirmar despacho
+            </button>
+            <button style="width:100%;padding:12px;border-radius:13px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer" onclick="showMobScreen('mob-des2')">
+              ← Volver a editar
+            </button>
+          </div>
+        </div>
+
+        <!-- ══ DESPACHO ÉXITO ══ -->
+        <div class="mobile-screen" id="mob-des-ok" style="background:var(--bg)">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center;height:100%">
+            <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,107,53,0.1);border:2px solid var(--accent3);display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:18px;box-shadow:0 0 40px rgba(255,107,53,.2);animation:popIn .4s ease">✂️</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:var(--accent3);margin-bottom:6px">DESPACHO REGISTRADO</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:22px" id="des-ok-sub">Rollos enviados a proceso.</div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px;width:100%;margin-bottom:18px">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--text3)">Proceso</span><span style="font-size:12px;font-weight:700;color:var(--accent3)" id="des-ok-tipo">—</span></div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;color:var(--text3)">Rollos despachados</span><span style="font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--accent3)" id="des-ok-count">—</span></div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:11px;color:var(--text3)">Zona origen</span><span style="font-size:12px;font-weight:700;color:var(--text)" id="des-ok-zona">—</span></div>
+            </div>
+            <button style="width:100%;padding:14px;border-radius:13px;border:none;background:var(--accent3);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px" onclick="despacho_reset();showMobScreen('mob-des1')">+ Nuevo despacho</button>
+            <button style="width:100%;padding:12px;border-radius:13px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer" onclick="showMobScreen('mob-home')">← Volver al inicio</button>
+          </div>
+        </div>
+
+        <!-- ══ HISTORIAL OPERARIO ══ -->
+        <div class="mobile-screen" id="mob-historial" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:50</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 14px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-home')">‹</button>
+              <div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">MI HISTORIAL</div>
+                <div style="font-size:10px;color:var(--text3)" id="hist-meta">Turno día · Juan Pérez</div>
+              </div>
+            </div>
+            <!-- Filtro tipo -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+              <button onclick="hist_filter('todos',this)" style="padding:5px 12px;border-radius:20px;border:1px solid var(--accent);background:rgba(0,212,170,0.1);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Todos</button>
+              <button onclick="hist_filter('ingreso',this)" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">📥 Ingresos</button>
+              <button onclick="hist_filter('traslado',this)" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🔄 Traslados</button>
+              <button onclick="hist_filter('despacho',this)" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">✂️ Despachos</button>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 20px">
+            <div class="hist-item ingreso">
+              <div class="hist-row"><span class="hist-main">📥 Ingreso desde Tejeduría</span><span class="hist-time">09:22</span></div>
+              <div class="hist-sub">EN2010KKSR · 20 rollos → Zona 1</div>
+            </div>
+            <div class="hist-item traslado">
+              <div class="hist-row"><span class="hist-main">🔄 Traslado</span><span class="hist-time">09:05</span></div>
+              <div class="hist-sub">EH2626NNLR · 5 rollos · Zona 1 → Zona 3</div>
+            </div>
+            <div class="hist-item despacho">
+              <div class="hist-row"><span class="hist-main">✂️ Despacho a Costura</span><span class="hist-time">08:47</span></div>
+              <div class="hist-sub">ES263KKLR · 8 rollos · desde Zona Carpa</div>
+            </div>
+            <div class="hist-item ingreso">
+              <div class="hist-row"><span class="hist-main">📥 Ingreso desde Costura</span><span class="hist-time">08:15</span></div>
+              <div class="hist-sub">ES263KKLR-C · 4 rollos nuevos ID → Zona 2</div>
+            </div>
+            <div class="hist-item traslado">
+              <div class="hist-row"><span class="hist-main">🔄 Traslado</span><span class="hist-time">07:58</span></div>
+              <div class="hist-sub">EC100NNSR · 3 rollos · Zona 2 → Zona Loza</div>
+            </div>
+          </div>
+          <div class="mobile-bottom-nav">
+            <div class="mobile-nav-item" onclick="showMobScreen('mob-home')"><div class="mobile-nav-icon">🏠</div><div class="mobile-nav-label">Inicio</div></div>
+            <div class="mobile-nav-item" onclick="ingreso_reset();showMobScreen('mob-ing1')"><div class="mobile-nav-icon">📥</div><div class="mobile-nav-label">Ingreso</div></div>
+            <div class="mobile-nav-item" onclick="traslado_reset();showMobScreen('mob-tra1')"><div class="mobile-nav-icon">🔄</div><div class="mobile-nav-label">Traslado</div></div>
+            <div class="mobile-nav-item active"><div class="mobile-nav-icon">📋</div><div class="mobile-nav-label">Historial</div></div>
+          </div>
+        </div>
+
+        <!-- ══ DASHBOARD SUPERVISOR (móvil) ══ -->
+        <div class="mobile-screen" id="mob-dashboard" style="background:var(--bg)">
+          <div class="mobile-status"><span class="mobile-time">09:50</span><span class="mobile-icons">📶 🔋</span></div>
+          <div style="padding:8px 20px 14px;flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:none;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center" onclick="showMobScreen('mob-home')">‹</button>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--text)">STOCK EN VIVO</div>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:0 16px 20px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
+                <div style="font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--accent)">284</div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Total rollos</div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center">
+                <div style="font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--warn)">3</div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Alertas stock</div>
+              </div>
+            </div>
+            <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Stock por zona</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">🏷️</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Zona 1</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:72%;background:var(--accent);border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent)">82</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">🏷️</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Zona 2</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:45%;background:var(--accent2);border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent2)">51</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">🏷️</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Zona 3</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:88%;background:var(--accent3);border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent3)">98</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">⛺</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Zona Carpa</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:30%;background:var(--warn);border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--warn)">34</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">🏗️</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Zona Loza</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:20%;background:#c084fc;border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:#c084fc">19</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">🧵</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Tejeduría</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:42%;background:#f472b6;border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:#f472b6">28</span>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">✂️</span>
+                <div style="flex:1"><div style="font-size:13px;font-weight:600">Costura-Plegado</div><div style="height:4px;background:var(--border2);border-radius:2px;margin-top:4px"><div style="height:100%;width:55%;background:#34d399;border-radius:2px"></div></div></div>
+                <span style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:#34d399">41</span>
+              </div>
+            </div>
+          </div>
+          <div class="mobile-bottom-nav">
+            <div class="mobile-nav-item" onclick="showMobScreen('mob-home')"><div class="mobile-nav-icon">🏠</div><div class="mobile-nav-label">Inicio</div></div>
+            <div class="mobile-nav-item active"><div class="mobile-nav-icon">📊</div><div class="mobile-nav-label">Stock</div></div>
+            <div class="mobile-nav-item" onclick="showMobScreen('mob-historial')"><div class="mobile-nav-icon">📋</div><div class="mobile-nav-label">Historial</div></div>
+          </div>
+        </div>
+      </div><!-- phone-screen -->
+    </div><!-- phone-frame -->
+    <div class="phone-label">
+      <div class="phone-label-title">APP OPERARIO — INGRESO</div>
+      <div class="phone-label-sub">Flujo completo de ingreso de rollos</div>
+    </div>
+  </div>
+
+</div><!-- end mobile-view -->
+
+</div><!-- end main -->
+
+<script>
+// ══════════════════════════════════════════
+//  PC NAVIGATION
+// ══════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ══════════════════════════════════════════
+//  VIEW TOGGLE
+// ══════════════════════════════════════════
+function switchView(view) {
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  if (view === 'pc') {
+    document.getElementById('pc-view').style.display = 'flex';
+    document.getElementById('mobile-view').style.display = 'none';
+  } else {
+    document.getElementById('pc-view').style.display = 'none';
+    document.getElementById('mobile-view').style.display = 'flex';
+  }
+}
+
+// ══════════════════════════════════════════
+//  MOBILE NAVIGATION
+// ══════════════════════════════════════════
+function showMobScreen(id) {
+  document.querySelectorAll('.mobile-screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── PIN LOGIN ──
+let pinCount = 0;
+function pinTap(n) {
+  if (pinCount < 4) {
+    pinCount++;
+    document.getElementById('pd' + pinCount).classList.add('filled');
+    if (pinCount === 4) setTimeout(goHome, 300);
+  }
+}
+function pinDel() {
+  if (pinCount > 0) {
+    document.getElementById('pd' + pinCount).classList.remove('filled');
+    pinCount--;
+  }
+}
+// ── SESIÓN ACTIVA ──
+let session = { user: '', role: 'operario' };
+
+function loginSelect(el, role, name) {
+  document.querySelectorAll('.op-sel-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  session.user = name;
+  session.role = role;
+}
+
+function selectOp(el) {
+  document.querySelectorAll('.op-sel-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function goHome() {
+  // Update home screen with session info
+  const initials = session.user.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const firstName = session.user.split(' ')[0].toUpperCase();
+  document.getElementById('hm-saludo').textContent = 'HOLA, ' + firstName;
+  document.getElementById('hm-avatar').textContent = initials;
+  document.getElementById('hm-hist-sub').textContent = 'Registros del turno · ' + session.user;
+  document.getElementById('hist-meta').textContent = 'Turno día · ' + session.user;
+  // Role badge
+  const badge = document.getElementById('hm-role-badge');
+  const roleSub = document.getElementById('hm-role-sub');
+  const supSection = document.getElementById('hm-sup-section');
+  if (session.role === 'admin') {
+    badge.className = 'role-badge admin'; badge.textContent = 'Admin';
+    roleSub.textContent = 'Jefa de Bodega · Acceso total';
+    supSection.style.display = 'block';
+    document.getElementById('iot-pro').style.display = 'flex';
+  } else if (session.role === 'supervisor') {
+    badge.className = 'role-badge supervisor'; badge.textContent = 'Supervisor';
+    roleSub.textContent = 'Supervisor · Turno día';
+    supSection.style.display = 'block';
+    document.getElementById('iot-pro').style.display = 'flex';
+  } else {
+    badge.className = 'role-badge operario'; badge.textContent = 'Operario';
+    roleSub.textContent = 'Operario · Turno día';
+    supSection.style.display = 'none';
+    document.getElementById('iot-pro').style.display = 'none';
+  }
+  // Update time
+  const now = new Date();
+  document.getElementById('hm-time').textContent = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  showMobScreen('mob-home');
+  pinCount = 0;
+  for (let i = 1; i <= 4; i++) document.getElementById('pd'+i).classList.remove('filled');
+}
+
+// ══════════════════════════════════════════
+//  CATÁLOGO DE PRODUCTOS
+// ══════════════════════════════════════════
+const PRODUCTOS = [
+  {code:'EH2626NNLR', name:'Antigranizo 2,6x2,6', detail:'Negra/Negra · LR'},
+  {code:'EH2626KKLR', name:'Antigranizo 2,6x2,6', detail:'Kristal/Kristal · LR'},
+  {code:'EH2626NNCO', name:'Antigranizo 2,6x2,6', detail:'Negra/Negra · CO'},
+  {code:'EH2626NNLC', name:'Antigranizo 2,6x2,6', detail:'Negra/Negra · LC'},
+  {code:'EH3128KKCO', name:'Antigranizo 3,1x2,8', detail:'Kristal/Kristal · CO'},
+  {code:'EN2010KKSR', name:'Antiáfido 20x10', detail:'Kristal/Kristal · SR'},
+  {code:'EN2010BBSR', name:'Antiáfido 20x10', detail:'Blanca/Blanca · SR'},
+  {code:'EN2010NNSR', name:'Antiáfido 20x10', detail:'Negra/Negra · SR'},
+  {code:'EN2010KKT28',name:'Antiáfido 20x10 T28', detail:'Kristal/Kristal · T28'},
+  {code:'EN1610KKSR', name:'Antiáfido 16x10', detail:'Kristal/Kristal · SR'},
+  {code:'EN1610NNSR', name:'Antiáfido 16x10', detail:'Negra/Negra · SR'},
+  {code:'EN1610BBSR', name:'Antiáfido 16x10', detail:'Blanca/Blanca · SR'},
+  {code:'EN108KKSR',  name:'Antiáfido 10x8', detail:'Kristal/Kristal · SR'},
+  {code:'ES263KKLR',  name:'Golpe de Sol 2,6x3', detail:'Kristal/Kristal · LR'},
+  {code:'ES263BBCO',  name:'Golpe de Sol 2,6x3', detail:'Blanca/Blanca · CO'},
+  {code:'ES263GPCO',  name:'Golpe de Sol 2,6x3', detail:'Gris/Perla · CO'},
+  {code:'ES264KKLR',  name:'Golpe de Sol 2,6x4', detail:'Kristal/Kristal · LR'},
+  {code:'ES44GPCO',   name:'Golpe de Sol 4x4', detail:'Gris/Perla · CO'},
+  {code:'ES44GPLR',   name:'Golpe de Sol 4x4', detail:'Gris/Perla · LR'},
+  {code:'ES54BBCO',   name:'Golpe de Sol 5x4', detail:'Blanca/Blanca · CO'},
+  {code:'ES54GPCO',   name:'Golpe de Sol 5x4', detail:'Gris/Perla · CO'},
+  {code:'EC100NNSR',  name:'Ground Cover 100g', detail:'Negra/Negra · SR'},
+  {code:'EC100MNSR',  name:'Ground Cover 100g', detail:'Marron/Negra · SR'},
+  {code:'EC145NNSR',  name:'Ground Cover 145g', detail:'Negra/Negra · SR'},
+  {code:'EC105BBSR',  name:'Ground Cover 105g', detail:'Blanca/Blanca · SR'},
+  {code:'EW66KKCV',   name:'Cortaviento 6x6', detail:'Kristal/Kristal · CV'},
+  {code:'EW66NNCV',   name:'Cortaviento 6x6', detail:'Negra/Negra · CV'},
+  {code:'EW66NBCV',   name:'Cortaviento 6x6', detail:'Negra/Blanca · CV'},
+  {code:'EW96KKCV',   name:'Cortaviento 9x6', detail:'Kristal/Kristal · CV'},
+  {code:'EF17BBSR',   name:'Manta Térmica', detail:'Blanca/Blanca · SR'},
+  {code:'NB14NNSR',   name:'Antipájaro Extruída 14Gr.', detail:'Negra/Negra · SR'},
+  {code:'EM55NNMR',   name:'Dormancia 5x5', detail:'Negra/Negra · MR'},
+  {code:'1310NNSR',   name:'Saran 13x10', detail:'Negra/Negra · SR'},
+  {code:'ER88NNCV',   name:'Saran 8x8', detail:'Negra/Negra · CV'},
+];
+
+// ══════════════════════════════════════════
+//  ESTADO GLOBAL DEL INGRESO
+// ══════════════════════════════════════════
+let ingreso = { nv:'', cantEsp:null, product:null, zona:'', rollos:[] };
+
+// ── Render lista de productos ──
+function ingreso_renderProds(list) {
+  const el = document.getElementById('prodListMob');
+  if (!list.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">Sin resultados</div>'; return; }
+  el.innerHTML = list.map(p => `
+    <div class="prod-item-mob" onclick="ingreso_selectProd('${p.code}')">
+      <span class="prod-code-mob">${p.code}</span>
+      <div>
+        <div style="font-size:12px;color:var(--text);font-weight:500">${p.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${p.detail}</div>
+      </div>
+    </div>`).join('');
+}
+
+function ingreso_filterProds() {
+  const q = document.getElementById('prodSearchMob').value.toLowerCase();
+  const filtered = PRODUCTOS.filter(p =>
+    p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || p.detail.toLowerCase().includes(q)
+  );
+  ingreso_renderProds(filtered.slice(0, 8));
+}
+
+function ingreso_selectProd(code) {
+  const p = PRODUCTOS.find(x => x.code === code);
+  ingreso.product = p;
+  document.getElementById('prodSelectorMob').style.display = 'none';
+  document.getElementById('prodSelectedMob').style.display = 'block';
+  document.getElementById('selCodeMob').textContent = p.code;
+  document.getElementById('selNameMob').textContent = p.name;
+  document.getElementById('selDetailMob').textContent = p.detail;
+  ingreso_checkStep1();
+}
+
+function ingreso_changeProd() {
+  ingreso.product = null;
+  document.getElementById('prodSelectorMob').style.display = 'block';
+  document.getElementById('prodSelectedMob').style.display = 'none';
+  ingreso_checkStep1();
+}
+
+function ingreso_selectZona(el, zona) {
+  document.querySelectorAll('.zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  ingreso.zona = zona;
+  ingreso_checkStep1();
+}
+
+function ingreso_checkStep1() {
+  ingreso.nv = (document.getElementById('nvInput').value || '').trim().toUpperCase();
+  const cantVal = document.getElementById('cantEsperada').value;
+  ingreso.cantEsp = cantVal ? parseInt(cantVal) : null;
+  const ok = ingreso.nv.length >= 3 && ingreso.product && ingreso.zona;
+  const btn = document.getElementById('ing1NextBtn');
+  btn.style.opacity = ok ? '1' : '0.4';
+  btn.style.pointerEvents = ok ? 'auto' : 'none';
+}
+
+function ingreso_editNV() {
+  document.getElementById('nvConfirmed').style.display = 'none';
+  document.getElementById('nvWrap1').style.display = 'block';
+}
+
+// ── Paso 1 → Paso 2 ──
+function ingreso_goToStep2() {
+  // Show NV as confirmed
+  document.getElementById('nvConfirmedVal').textContent = ingreso.nv;
+  document.getElementById('nvWrap1').style.display = 'none';
+  document.getElementById('nvConfirmed').style.display = 'block';
+  // Update subtitle
+  document.getElementById('s2subtitle').textContent = `${ingreso.nv}  ·  ${ingreso.product.code}  ·  ${ingreso.zona}`;
+  // Update counters
+  ingreso_updateCounters();
+  ingreso_renderRollos();
+  showMobScreen('mob-ing2');
+}
+
+// ── Rollos logic ──
+function ingreso_addRollo() {
+  const field = document.getElementById('scanField');
+  const val = field.value.trim().toUpperCase();
+  if (!val) return;
+  const hint = document.getElementById('scanHint2');
+  if (ingreso.rollos.find(r => r === val)) {
+    hint.textContent = '⚠️ Este ID ya fue escaneado';
+    hint.style.color = 'var(--warn)';
+    field.value = '';
+    setTimeout(() => { hint.textContent = 'Escribe o escanea el ID de cada rollo y presiona +'; hint.style.color = 'var(--text3)'; }, 2500);
+    return;
+  }
+  ingreso.rollos.push(val);
+  field.value = '';
+  document.getElementById('scanBox2').classList.remove('hot');
+  hint.textContent = `✓ Rollo ${val} agregado`;
+  hint.style.color = 'var(--accent)';
+  ingreso_updateCounters();
+  ingreso_renderRollos();
+  const btn = document.getElementById('ing2NextBtn');
+  btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+  field.focus();
+  setTimeout(() => { hint.textContent = 'Escribe o escanea el ID de cada rollo y presiona +'; hint.style.color = 'var(--text3)'; }, 2000);
+}
+
+function ingreso_deleteRollo(id) {
+  ingreso.rollos = ingreso.rollos.filter(r => r !== id);
+  ingreso_updateCounters();
+  ingreso_renderRollos();
+  if (!ingreso.rollos.length) {
+    const btn = document.getElementById('ing2NextBtn');
+    btn.style.opacity = '0.4'; btn.style.pointerEvents = 'none';
+  }
+}
+
+function ingreso_updateCounters() {
+  const n = ingreso.rollos.length;
+  document.getElementById('cEsc').textContent = n;
+  document.getElementById('rollosCountMob').textContent = `${n} rollo${n !== 1 ? 's' : ''}`;
+  if (ingreso.cantEsp) {
+    const pend = Math.max(0, ingreso.cantEsp - n);
+    document.getElementById('cEsp').textContent = ingreso.cantEsp;
+    document.getElementById('cPend').textContent = pend;
+    document.getElementById('cEsp').style.color = 'var(--accent2)';
+    document.getElementById('cPend').style.color = pend === 0 ? 'var(--accent)' : 'var(--accent3)';
+  } else {
+    document.getElementById('cEsp').textContent = '—';
+    document.getElementById('cPend').textContent = '—';
+  }
+}
+
+function ingreso_renderRollos() {
+  const el = document.getElementById('rollosListMob');
+  if (!ingreso.rollos.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px"><div style="font-size:28px;opacity:.3;margin-bottom:6px">📦</div>Aún no hay rollos escaneados</div>';
+    return;
+  }
+  el.innerHTML = ingreso.rollos.map((id, i) => `
+    <div class="rollo-row" style="animation-delay:${i * 0.02}s">
+      <span class="rollo-idx">${i + 1}</span>
+      <span class="rollo-id">${id}</span>
+      <span class="rollo-ok">✓ OK</span>
+      <button class="rollo-del-btn" onclick="ingreso_deleteRollo('${id}')">✕</button>
+    </div>`).join('');
+}
+
+// ── Paso 2 → Paso 3 ──
+function ingreso_goToStep3() {
+  const n = ingreso.rollos.length;
+  document.getElementById('conf_nv').textContent = ingreso.nv;
+  document.getElementById('conf_meta').textContent = `${ingreso.product.name}  ·  ${ingreso.zona}  ·  Juan Pérez`;
+  document.getElementById('conf_total').textContent = n;
+  document.getElementById('conf_zona').textContent = ingreso.zona;
+  document.getElementById('conf_rollos').innerHTML = ingreso.rollos.map(id => `
+    <div class="confirm-rollo-mob">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--accent);flex:1">${id}</span>
+      <span style="font-size:10px;color:var(--text3);flex:1">${ingreso.product.code}</span>
+      <span style="font-size:9px;font-weight:700;color:var(--accent2);background:rgba(0,153,255,0.1);padding:2px 7px;border-radius:4px">${ingreso.zona}</span>
+    </div>`).join('');
+  showMobScreen('mob-ing3');
+}
+
+// ── Guardar ──
+function ingreso_guardar() {
+  const n = ingreso.rollos.length;
+  document.getElementById('ok_nv').textContent = ingreso.nv;
+  document.getElementById('ok_prod').textContent = `${ingreso.product.code} · ${ingreso.product.name}`;
+  document.getElementById('ok_count').textContent = `${n} rollo${n !== 1 ? 's' : ''}`;
+  document.getElementById('ok_zona').textContent = ingreso.zona;
+  document.getElementById('ok_sub').textContent = `${n} rollo${n !== 1 ? 's' : ''} registrados y stock actualizado en ${ingreso.zona}.`;
+  showMobScreen('mob-ing-ok');
+}
+
+// ── Reset ──
+function ingreso_reset() {
+  ingreso = { nv:'', cantEsp:null, product:null, zona:'', rollos:[] };
+  const nvInput = document.getElementById('nvInput');
+  if (nvInput) nvInput.value = '';
+  const cantEl = document.getElementById('cantEsperada');
+  if (cantEl) cantEl.value = '';
+  const searchEl = document.getElementById('prodSearchMob');
+  if (searchEl) searchEl.value = '';
+  document.getElementById('nvWrap1').style.display = 'block';
+  document.getElementById('nvConfirmed').style.display = 'none';
+  document.getElementById('prodSelectorMob').style.display = 'block';
+  document.getElementById('prodSelectedMob').style.display = 'none';
+  document.querySelectorAll('.zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  const btn = document.getElementById('ing1NextBtn');
+  btn.style.opacity = '0.4'; btn.style.pointerEvents = 'none';
+  const btn2 = document.getElementById('ing2NextBtn');
+  btn2.style.opacity = '0.4'; btn2.style.pointerEvents = 'none';
+  ingreso_renderProds(PRODUCTOS.slice(0, 6));
+  ingreso_updateCounters();
+  ingreso_renderRollos();
+}
+
+
+// ── INGRESO: ORIGEN ──
+function ingreso_setOrigen(el, tipo) {
+  document.querySelectorAll('#ing-origen-grid .ing-type-card').forEach(c => c.className = 'ing-type-card');
+  el.classList.add('selected-' + tipo);
+  ingreso.origen = tipo;
+  // Update doc label
+  const label = document.getElementById('ing-doc-label');
+  const hint = document.getElementById('ing-doc-hint');
+  const input = document.getElementById('nvInput');
+  if (tipo === 'proveedor') {
+    label.textContent = '📄 Guía de Despacho';
+    input.placeholder = 'Ej: GD-2025-001234';
+    hint.textContent = 'N° de guía de despacho del proveedor';
+  } else if (tipo === 'costura' || tipo === 'plegado') {
+    label.textContent = '📋 Referencia interna';
+    input.placeholder = 'Ej: ORD-2025-089 (opcional)';
+    hint.textContent = 'Referencia de la orden de costura o plegado';
+  } else {
+    label.textContent = '🧾 Referencia';
+    input.placeholder = 'Ej: NV-2025-001234';
+    hint.textContent = 'N° de nota de venta o referencia interna';
+  }
+  ingreso_checkStep1();
+}
+
+// ── DESPACHO: ESTADO ──
+let despacho = { tipo: '', zona: '', orden: '', rollos: [] };
+
+function despacho_setTipo(el, tipo) {
+  document.querySelectorAll('.despacho-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  despacho.tipo = tipo;
+  despacho_checkStep1();
+}
+
+function despacho_setZona(el, zona) {
+  document.querySelectorAll('#des-zona-grid .zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  despacho.zona = zona;
+  despacho_checkStep1();
+}
+
+function despacho_checkStep1() {
+  despacho.orden = (document.getElementById('desOrden').value || '').trim();
+  const ok = despacho.tipo && despacho.zona;
+  const btn = document.getElementById('des1NextBtn');
+  btn.style.opacity = ok ? '1' : '0.4';
+  btn.style.pointerEvents = ok ? 'auto' : 'none';
+}
+
+function despacho_goToStep2() {
+  const tipoLabel = despacho.tipo === 'costura' ? 'Costura' : 'Plegado';
+  document.getElementById('des-s2-sub').textContent = tipoLabel + ' · desde ' + despacho.zona;
+  despacho_renderRollos();
+  showMobScreen('mob-des2');
+}
+
+function despacho_addRollo() {
+  const field = document.getElementById('des-scanField');
+  const val = field.value.trim().toUpperCase();
+  if (!val) return;
+  const hint = document.getElementById('des-scanHint');
+  if (despacho.rollos.includes(val)) {
+    hint.textContent = '⚠️ Rollo ' + val + ' ya agregado';
+    hint.style.color = 'var(--warn)'; field.value = '';
+    setTimeout(() => { hint.textContent = 'Escanea o escribe el ID de cada rollo'; hint.style.color = 'var(--text3)'; }, 2500);
+    return;
+  }
+  despacho.rollos.push(val);
+  field.value = '';
+  document.getElementById('des-scanBox').classList.remove('hot');
+  hint.textContent = '✓ Rollo ' + val + ' agregado';
+  hint.style.color = 'var(--accent3)';
+  despacho_updateCounters();
+  despacho_renderRollos();
+  const btn = document.getElementById('des2NextBtn');
+  btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+  field.focus();
+  setTimeout(() => { hint.textContent = 'Escanea o escribe el ID de cada rollo'; hint.style.color = 'var(--text3)'; }, 2000);
+}
+
+function despacho_deleteRollo(id) {
+  despacho.rollos = despacho.rollos.filter(r => r !== id);
+  despacho_updateCounters(); despacho_renderRollos();
+  if (!despacho.rollos.length) { const b = document.getElementById('des2NextBtn'); b.style.opacity='0.4'; b.style.pointerEvents='none'; }
+}
+
+function despacho_updateCounters() {
+  const n = despacho.rollos.length;
+  document.getElementById('des-cEsc').textContent = n;
+  document.getElementById('des-rollosCount').textContent = n + ' rollo' + (n!==1?'s':'');
+}
+
+function despacho_renderRollos() {
+  const el = document.getElementById('des-rollosList');
+  if (!despacho.rollos.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px"><div style="font-size:28px;opacity:.3;margin-bottom:6px">✂️</div>Aún no hay rollos seleccionados</div>';
+    return;
+  }
+  el.innerHTML = despacho.rollos.map((id,i) => `
+    <div class="rollo-row" style="animation-delay:${i*.02}s">
+      <span class="rollo-idx">${i+1}</span>
+      <span class="rollo-id" style="color:var(--accent3)">${id}</span>
+      <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,107,53,0.1);color:var(--accent3)">→ ${despacho.tipo.toUpperCase()}</span>
+      <button class="rollo-del-btn" onclick="despacho_deleteRollo('${id}')">✕</button>
+    </div>`).join('');
+}
+
+function despacho_goToStep3() {
+  const n = despacho.rollos.length;
+  const tipoLabel = despacho.tipo === 'costura' ? 'COSTURA' : 'PLEGADO';
+  document.getElementById('des-conf-tipo-lbl').textContent = tipoLabel;
+  document.getElementById('des-conf-orden').textContent = despacho.orden || 'Sin orden asignada';
+  document.getElementById('des-conf-meta').textContent = 'desde ' + despacho.zona + ' · ' + session.user;
+  document.getElementById('des-conf-total').textContent = n;
+  document.getElementById('des-conf-zona').textContent = despacho.zona;
+  document.getElementById('des-conf-rollos').innerHTML = despacho.rollos.map(id => `
+    <div class="confirm-rollo-mob">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--accent3);flex:1">${id}</span>
+      <span style="font-size:9px;color:var(--text3)">${despacho.zona}</span>
+      <span style="font-size:14px;opacity:.5;padding:0 3px">→</span>
+      <span style="font-size:9px;color:var(--accent3);font-weight:700;background:rgba(255,107,53,0.1);padding:2px 6px;border-radius:4px">${tipoLabel}</span>
+    </div>`).join('');
+  showMobScreen('mob-des3');
+}
+
+function despacho_guardar() {
+  const n = despacho.rollos.length;
+  const tipoLabel = despacho.tipo === 'costura' ? 'Costura' : 'Plegado';
+  document.getElementById('des-ok-tipo').textContent = tipoLabel;
+  document.getElementById('des-ok-count').textContent = n + ' rollo' + (n!==1?'s':'');
+  document.getElementById('des-ok-zona').textContent = despacho.zona;
+  document.getElementById('des-ok-sub').textContent = n + ' rollo' + (n!==1?'s':'') + ' enviados a ' + tipoLabel + ' desde ' + despacho.zona + '.';
+  showMobScreen('mob-des-ok');
+}
+
+function despacho_reset() {
+  despacho = { tipo:'', zona:'', orden:'', rollos:[] };
+  document.querySelectorAll('.despacho-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('#des-zona-grid .zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  const oi = document.getElementById('desOrden'); if(oi) oi.value = '';
+  const sf = document.getElementById('des-scanField'); if(sf) sf.value = '';
+  const b1 = document.getElementById('des1NextBtn'); if(b1){b1.style.opacity='0.4';b1.style.pointerEvents='none';}
+  const b2 = document.getElementById('des2NextBtn'); if(b2){b2.style.opacity='0.4';b2.style.pointerEvents='none';}
+  despacho_renderRollos(); despacho_updateCounters();
+}
+
+// ── HISTORIAL FILTER ──
+function hist_filter(tipo, btn) {
+  document.querySelectorAll('#mob-historial button').forEach(b => {
+    b.style.borderColor = 'var(--border2)'; b.style.background = 'transparent'; b.style.color = 'var(--text3)';
+  });
+  btn.style.borderColor = 'var(--accent)'; btn.style.background = 'rgba(0,212,170,0.1)'; btn.style.color = 'var(--accent)';
+}
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', () => {
+  ingreso_renderProds(PRODUCTOS.slice(0, 6));
+  despacho_renderRollos();
+});
+
+// ══════════════════════════════════════════
+//  TRASLADO — ESTADO GLOBAL
+// ══════════════════════════════════════════
+let traslado = { origen: '', destino: '', rollos: [] };
+
+function traslado_selectOrigen(el, zona) {
+  document.querySelectorAll('#tr_origen_grid .zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  traslado.origen = zona;
+  traslado_checkStep1();
+}
+
+function traslado_selectDestino(el, zona) {
+  document.querySelectorAll('#tr_destino_grid .zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  traslado.destino = zona;
+  traslado_checkStep1();
+}
+
+function traslado_checkStep1() {
+  const sameWarn = document.getElementById('tr_same_warn');
+  const btn = document.getElementById('tra1NextBtn');
+  const same = traslado.origen && traslado.destino && traslado.origen === traslado.destino;
+  sameWarn.style.display = same ? 'block' : 'none';
+  const ok = traslado.origen && traslado.destino && !same;
+  btn.style.opacity = ok ? '1' : '0.4';
+  btn.style.pointerEvents = ok ? 'auto' : 'none';
+}
+
+function traslado_goToStep2() {
+  document.getElementById('tr_s2sub').textContent = `${traslado.origen}  →  ${traslado.destino}`;
+  document.getElementById('tr_ori_mini').textContent = traslado.origen.replace('Zona ','Z');
+  document.getElementById('tr_des_mini').textContent = traslado.destino.replace('Zona ','Z');
+  traslado_updateCounters();
+  traslado_renderRollos();
+  showMobScreen('mob-tra2');
+}
+
+function traslado_addRollo() {
+  const field = document.getElementById('tr_scanField');
+  const val = field.value.trim().toUpperCase();
+  if (!val) return;
+  const hint = document.getElementById('tr_scanHint');
+  if (traslado.rollos.find(r => r === val)) {
+    hint.textContent = '⚠️ Este ID ya fue agregado';
+    hint.style.color = 'var(--warn)';
+    field.value = '';
+    setTimeout(() => { hint.textContent = 'Escribe o escanea el ID de cada rollo y presiona +'; hint.style.color = 'var(--text3)'; }, 2500);
+    return;
+  }
+  traslado.rollos.push(val);
+  field.value = '';
+  document.getElementById('tr_scanBox').classList.remove('hot');
+  hint.textContent = `✓ Rollo ${val} agregado`;
+  hint.style.color = 'var(--accent)';
+  traslado_updateCounters();
+  traslado_renderRollos();
+  const btn = document.getElementById('tra2NextBtn');
+  btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+  field.focus();
+  setTimeout(() => { hint.textContent = 'Escribe o escanea el ID de cada rollo y presiona +'; hint.style.color = 'var(--text3)'; }, 2000);
+}
+
+function traslado_deleteRollo(id) {
+  traslado.rollos = traslado.rollos.filter(r => r !== id);
+  traslado_updateCounters();
+  traslado_renderRollos();
+  if (!traslado.rollos.length) {
+    const btn = document.getElementById('tra2NextBtn');
+    btn.style.opacity = '0.4'; btn.style.pointerEvents = 'none';
+  }
+}
+
+function traslado_updateCounters() {
+  const n = traslado.rollos.length;
+  document.getElementById('tr_cEsc').textContent = n;
+  document.getElementById('tr_rollosCount').textContent = `${n} rollo${n !== 1 ? 's' : ''}`;
+}
+
+function traslado_renderRollos() {
+  const el = document.getElementById('tr_rollosList');
+  if (!traslado.rollos.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px"><div style="font-size:28px;opacity:.3;margin-bottom:6px">🔄</div>Aún no hay rollos seleccionados</div>';
+    return;
+  }
+  el.innerHTML = traslado.rollos.map((id, i) => `
+    <div class="rollo-row" style="animation-delay:${i * 0.02}s">
+      <span class="rollo-idx">${i + 1}</span>
+      <span class="rollo-id" style="color:var(--accent2)">${id}</span>
+      <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(0,153,255,0.1);color:var(--accent2)">🔄 MOVER</span>
+      <button class="rollo-del-btn" onclick="traslado_deleteRollo('${id}')">✕</button>
+    </div>`).join('');
+}
+
+function traslado_goToStep3() {
+  const n = traslado.rollos.length;
+  document.getElementById('tr_conf_ori').textContent = traslado.origen;
+  document.getElementById('tr_conf_des').textContent = traslado.destino;
+  document.getElementById('tr_conf_total').textContent = n;
+  document.getElementById('tr_conf_rollos').innerHTML = traslado.rollos.map(id => `
+    <div class="confirm-rollo-mob">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--accent2);flex:1">${id}</span>
+      <span style="font-size:9px;color:var(--accent);background:rgba(0,212,170,0.1);padding:2px 7px;border-radius:4px">${traslado.origen}</span>
+      <span style="font-size:14px;padding:0 3px;opacity:0.5">→</span>
+      <span style="font-size:9px;color:var(--accent2);background:rgba(0,153,255,0.1);padding:2px 7px;border-radius:4px">${traslado.destino}</span>
+    </div>`).join('');
+  showMobScreen('mob-tra3');
+}
+
+function traslado_guardar() {
+  const n = traslado.rollos.length;
+  document.getElementById('tr_ok_ori').textContent = traslado.origen;
+  document.getElementById('tr_ok_des').textContent = traslado.destino;
+  document.getElementById('tr_ok_count').textContent = `${n} rollo${n !== 1 ? 's' : ''}`;
+  document.getElementById('tr_ok_sub').textContent = `${n} rollo${n !== 1 ? 's' : ''} movidos de ${traslado.origen} a ${traslado.destino}.`;
+  showMobScreen('mob-tra-ok');
+}
+
+function traslado_reset() {
+  traslado = { origen: '', destino: '', rollos: [] };
+  document.querySelectorAll('#tr_origen_grid .zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('#tr_destino_grid .zona-btn-mob').forEach(b => b.classList.remove('selected'));
+  document.getElementById('tr_same_warn').style.display = 'none';
+  const btn1 = document.getElementById('tra1NextBtn');
+  btn1.style.opacity = '0.4'; btn1.style.pointerEvents = 'none';
+  const btn2 = document.getElementById('tra2NextBtn');
+  btn2.style.opacity = '0.4'; btn2.style.pointerEvents = 'none';
+  const field = document.getElementById('tr_scanField');
+  if (field) field.value = '';
+  traslado_updateCounters();
+  traslado_renderRollos();
+}
+</script>
+</body>
+</html>
