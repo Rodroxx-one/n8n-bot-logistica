@@ -4,7 +4,6 @@ const axios = require('axios');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 const { google } = require('googleapis');
-const { Readable } = require('stream');
 const fs = require('fs');
 const path = require('path');
 
@@ -37,11 +36,12 @@ const DRIVE_ROOT_ID   = process.env.GOOGLE_DRIVE_FOLDER_ID || null; // ID fijo d
 //
 // ESTRUCTURA POR USUARIO:
 // {
-//   estado    : 'esperando_decision' | 'esperando_obs' | null
-//   pendiente : { fileIds, isAlbum, operario }   ← lote ACTUAL preguntado
-//   cola      : [ { fileIds, isAlbum, operario }, ... ]  ← lotes EN ESPERA
-//   timestamp : Date.now()
-//   msgId     : message_id del mensaje de pregunta (para editarlo)
+//   estado     : 'esperando_decision' | 'esperando_obs' | null
+//   pendiente  : { fileIds, isAlbum, operario }   ← lote ACTUAL preguntado
+//   cola       : [ { fileIds, isAlbum, operario }, ... ]  ← lotes EN ESPERA
+//   processing : boolean                               ← lote en procesamiento
+//   timestamp  : Date.now()
+//   msgId      : message_id del mensaje de pregunta (para editarlo)
 // }
 //
 // El usuario siempre ve UNA pregunta a la vez.
@@ -108,12 +108,18 @@ function manejarFotoDeAlbum(mediaGroupId, chatId, operario, fileId) {
  */
 async function encolarLote(chatId, lote) {
     const state = userStates.get(chatId);
+    const estaOcupado = state && (
+        state.estado ||
+        state.pendiente ||
+        state.processing ||
+        (state.cola && state.cola.length > 0)
+    );
 
-    if (!state || !state.estado) {
-        // No hay nada pendiente → preguntar ahora
+    if (!estaOcupado) {
+        // No hay nada pendiente ni en procesamiento → preguntar ahora
         await pedirObservacion(chatId, lote);
     } else {
-        // Hay una pregunta activa → encolar y avisar
+        // Ya hay un lote activo, en procesamiento o en espera → encolar y avisar
         state.cola.push(lote);
         state.timestamp = Date.now();
         const posicion = state.cola.length;
@@ -122,7 +128,7 @@ async function encolarLote(chatId, lote) {
 
         await bot.sendMessage(chatId,
             `🕐 *${cantidad} foto${cantidad > 1 ? 's' : ''} recibida${cantidad > 1 ? 's' : ''}* — en cola (posición ${posicion}).\n` +
-            `_Responde la pregunta anterior y este lote se procesará automáticamente._`,
+            `_Responde la pregunta actual o espera a que termine el lote en proceso para continuar._`,
             { parse_mode: 'Markdown' }
         ).catch(() => {});
     }
@@ -142,11 +148,12 @@ async function pedirObservacion(chatId, lote) {
     // Esto impide que llamadas concurrentes pasen el check de encolarLote
     const colaExistente = userStates.get(chatId)?.cola || [];
     userStates.set(chatId, {
-        estado   : 'esperando_decision',
-        pendiente: lote,
-        cola     : colaExistente,
-        timestamp: Date.now(),
-        msgId    : null  // se actualiza tras el send
+        estado    : 'esperando_decision',
+        pendiente : lote,
+        cola      : colaExistente,
+        processing: false,
+        timestamp : Date.now(),
+        msgId     : null  // se actualiza tras el send
     });
 
     let msgEnviado;
@@ -229,7 +236,7 @@ bot.on('callback_query', async (query) => {
         // Sin observación → procesar de inmediato
         const lote = state.pendiente;
         // Marcar como procesando (estado null para no bloquear cola)
-        userStates.set(chatId, { ...state, estado: null, pendiente: null });
+        userStates.set(chatId, { ...state, estado: null, pendiente: null, processing: true });
 
         await bot.editMessageText(
             `⏳ *Procesando${lote.isAlbum ? ` ${lote.fileIds.length} fotos` : ''}...*`,
@@ -270,11 +277,15 @@ bot.on('text', async (msg) => {
 
     if (texto === '/cola') {
         const state = userStates.get(chatId);
-        if (!state || !state.estado) {
+        if (!state) {
             await bot.sendMessage(chatId, `✅ No hay lotes en espera.`);
         } else {
             const enCola = state.cola?.length || 0;
-            const estadoTexto = state.estado === 'esperando_decision' ? 'esperando tu respuesta' : 'esperando observación';
+            let estadoTexto = 'sin actividad reciente';
+            if (state.estado === 'esperando_decision') estadoTexto = 'esperando tu respuesta';
+            else if (state.estado === 'esperando_obs') estadoTexto = 'esperando observación';
+            else if (state.processing) estadoTexto = 'procesando lote actual';
+
             await bot.sendMessage(chatId,
                 `📋 *Estado de la cola:*\n` +
                 `• 1 lote activo (${estadoTexto})\n` +
@@ -309,7 +320,7 @@ bot.on('text', async (msg) => {
         const lote = state.pendiente;
 
         // Marcar como procesando antes de todo
-        userStates.set(chatId, { ...state, estado: null, pendiente: null });
+        userStates.set(chatId, { ...state, estado: null, pendiente: null, processing: true });
 
         await bot.sendMessage(chatId,
             `✅ Observación guardada: _"${observacion}"_\n⏳ *Procesando...*`,
@@ -634,18 +645,16 @@ async function subirFotoADrive(buffer, nombreArchivo, nombreObs) {
         const drive    = google.drive({ version: 'v3', auth });
         const carpetaId = await obtenerOCrearCarpeta(drive, nombreObs);
 
-        const { Readable } = require('stream');
-        const stream = new Readable();
-        stream.push(buffer);
-        stream.push(null);
-
         await drive.files.create({
             requestBody: {
                 name    : nombreArchivo,
                 parents : [carpetaId],
                 mimeType: 'image/jpeg'
             },
-            media: { mimeType: 'image/jpeg', body: stream },
+            media: {
+                mimeType: 'image/jpeg',
+                body: buffer
+            },
             fields: 'id'
         });
 
@@ -653,7 +662,7 @@ async function subirFotoADrive(buffer, nombreArchivo, nombreObs) {
         return carpetaId;
     } catch (err) {
         // Drive falla silenciosamente — Sheets siempre tiene prioridad
-        console.error('⚠️ Drive upload falló (no crítico):', err.message);
+        console.error('⚠️ Drive upload falló (no crítico):', err.stack || err.message || err);
         return null;
     }
 }
