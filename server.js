@@ -4,12 +4,14 @@ const axios = require('axios');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 const { google } = require('googleapis');
+const { Readable } = require('stream');
 const fs = require('fs');
 const path = require('path');
 
 // ─── Validación de variables de entorno ────────────────────────────────────
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 if (!TELEGRAM_TOKEN || !GEMINI_API_KEY || !SPREADSHEET_ID) {
@@ -20,6 +22,7 @@ if (!TELEGRAM_TOKEN || !GEMINI_API_KEY || !SPREADSHEET_ID) {
 // ─── Inicialización del bot ─────────────────────────────────────────────────
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 console.log('🤖 Bot de logística iniciado correctamente.');
+console.log(`🔧 Gemini modelo: ${GEMINI_MODEL}`);
 
 // ─── Cola de procesamiento Gemini/Sheets (evita saturar la API) ────────────
 let processingQueue = Promise.resolve();
@@ -63,17 +66,19 @@ bot.on('photo', async (msg) => {
     const mediaGroup = msg.media_group_id;
     const fileId     = msg.photo[msg.photo.length - 1].file_id;
 
+    console.log(`📩 Foto recibida chat=${chatId} mediaGroup=${mediaGroup || 'none'} operario=${operario}`);
+
     try {
         if (mediaGroup) {
             manejarFotoDeAlbum(mediaGroup, chatId, operario, fileId);
         } else {
             // Foto individual → encolar o preguntar
-            encolarLote(chatId, { fileIds: [fileId], isAlbum: false, operario });
+            await encolarLote(chatId, { fileIds: [fileId], isAlbum: false, operario });
         }
     } catch (err) {
-        console.error('❌ Error en handler foto:', err.message);
+        console.error('❌ Error en handler foto:', err);
         await bot.sendMessage(chatId,
-            `❌ Error interno al recibir la foto: _${err.message.substring(0, 200)}_\n\nEscribe /reset e intenta de nuevo.`,
+            `❌ Error interno al recibir la foto: _${String(err).substring(0, 200)}_\n\nEscribe /reset e intenta de nuevo.`,
             { parse_mode: 'Markdown' }
         ).catch(() => {});
     }
@@ -90,10 +95,21 @@ function manejarFotoDeAlbum(mediaGroupId, chatId, operario, fileId) {
 
     clearTimeout(album.timer);
     album.timer = setTimeout(async () => {
-        const { fileIds } = albumTracker.get(mediaGroupId);
-        albumTracker.delete(mediaGroupId);
-        // Álbum completo → encolar lote
-        encolarLote(chatId, { fileIds, isAlbum: true, operario });
+        try {
+            const data = albumTracker.get(mediaGroupId);
+            if (!data) return;
+            const { fileIds } = data;
+            albumTracker.delete(mediaGroupId);
+            console.log(`📦 Álbum completo chat=${chatId} fotos=${fileIds.length}`);
+            // Álbum completo → encolar lote
+            await encolarLote(chatId, { fileIds, isAlbum: true, operario });
+        } catch (err) {
+            console.error('❌ Error procesando álbum:', err);
+            await bot.sendMessage(chatId,
+                `❌ Error interno al procesar el álbum: _${String(err).substring(0, 200)}_\n\nEscribe /reset e intenta de nuevo.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+        }
     }, 2000);
 }
 
@@ -117,6 +133,7 @@ async function encolarLote(chatId, lote) {
 
     if (!estaOcupado) {
         // No hay nada pendiente ni en procesamiento → preguntar ahora
+        console.log(`📤 Pregunta de observación para chat=${chatId} fotos=${lote.fileIds.length} album=${lote.isAlbum}`);
         await pedirObservacion(chatId, lote);
     } else {
         // Ya hay un lote activo, en procesamiento o en espera → encolar y avisar
@@ -370,7 +387,7 @@ function iniciarProcesamiento(chatId, pendiente, observacion) {
                         { parse_mode: 'Markdown', disable_web_page_preview: true }
                     );
                 } catch (error) {
-                    console.error('❌ Error:', error.message);
+                    console.error('❌ Error procesando etiqueta:', error);
                     await bot.sendMessage(chatId,
                         `❌ *Error al procesar la etiqueta.*\n_${error.message.substring(0, 150)}_`,
                         { parse_mode: 'Markdown' }
@@ -442,7 +459,15 @@ async function enviarResumenAlbum(chatId, total, exitosos, fallidos, detalles, l
 async function descargarYProcesar(fileId) {
     const fileUrl = await bot.getFileLink(fileId);
     console.log('📥 Descargando:', fileUrl);
-    const res    = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    let res;
+    try {
+        res = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    } catch (err) {
+        const detail = formatAxiosError(err);
+        console.error(`❌ Falló descarga de Telegram: ${detail}`);
+        throw new Error(`Error descargando la imagen de Telegram: ${detail}`);
+    }
+
     const buffer = Buffer.from(res.data);
     const b64    = buffer.toString('base64');
     console.log(`🖼️ ${res.data.byteLength} bytes`);
@@ -453,7 +478,7 @@ async function descargarYProcesar(fileId) {
 
 // ─── Llamar a Gemini Vision API ─────────────────────────────────────────────
 async function llamarGeminiVision(imageBase64) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
     const prompt = `Eres un asistente de logística especializado en etiquetas de rollos de tela.
 Analiza esta imagen y extrae los siguientes campos.
@@ -468,9 +493,19 @@ Devuelve ÚNICAMENTE un JSON válido con exactamente estas claves:
 Si algún campo no se puede leer claramente, usa "No detectado".
 Nunca devuelvas markdown, bloques de código ni explicaciones. Solo el JSON puro.`;
 
-    const response = await axios.post(url, {
-        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }] }]
-    }, { timeout: 30000, headers: { 'Content-Type': 'application/json' } });
+    let response;
+    try {
+        response = await axios.post(url, {
+            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }] }]
+        }, { timeout: 30000, headers: { 'Content-Type': 'application/json' } });
+    } catch (err) {
+        const detail = formatAxiosError(err);
+        console.error(`❌ Falló llamada a Gemini: ${detail}`);
+        if (err.response?.status === 403) {
+            throw new Error(`Error en Gemini Vision: acceso denegado (403). Verifica que tu proyecto tenga permiso para usar Gemini. ${detail}`);
+        }
+        throw new Error(`Error en Gemini Vision: ${detail}`);
+    }
 
     let raw = response.data.candidates[0].content.parts[0].text.trim();
     raw = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').replace(/^```\n?/, '').replace(/\n?```$/, '');
@@ -645,7 +680,8 @@ async function subirFotoADrive(buffer, nombreArchivo, nombreObs) {
         const drive    = google.drive({ version: 'v3', auth });
         const carpetaId = await obtenerOCrearCarpeta(drive, nombreObs);
 
-        await drive.files.create({
+        const stream = Readable.from(buffer);
+        const response = await drive.files.create({
             requestBody: {
                 name    : nombreArchivo,
                 parents : [carpetaId],
@@ -653,12 +689,13 @@ async function subirFotoADrive(buffer, nombreArchivo, nombreObs) {
             },
             media: {
                 mimeType: 'image/jpeg',
-                body: buffer
+                body: stream
             },
             fields: 'id'
         });
 
-        console.log(`☁️ Drive: ${nombreArchivo} → ${nombreObs}`);
+        const fileId = response.data?.id;
+        console.log(`☁️ Drive: ${nombreArchivo} → ${nombreObs} [fileId=${fileId}]`);
         return carpetaId;
     } catch (err) {
         // Drive falla silenciosamente — Sheets siempre tiene prioridad
@@ -669,6 +706,15 @@ async function subirFotoADrive(buffer, nombreArchivo, nombreObs) {
 
 // ─── Utilidad ───────────────────────────────────────────────────────────────
 function esperar(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function formatAxiosError(error) {
+    if (!error) return 'Error desconocido';
+    const status = error.response?.status;
+    const statusText = error.response?.statusText ? ` ${error.response.statusText}` : '';
+    const data = error.response?.data;
+    const dataText = data ? ` | response: ${typeof data === 'string' ? data : JSON.stringify(data).substring(0, 500)}` : '';
+    return `${error.message || 'Error Axios'}${status ? ` (status ${status}${statusText})` : ''}${dataText}`;
+}
 
 // ─── Limpieza periódica (evita fugas de memoria) ────────────────────────────
 setInterval(() => {
