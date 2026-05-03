@@ -52,6 +52,21 @@ const userStates = new Map();
 // ─── Rastreo de álbumes de Telegram ────────────────────────────────────────
 const albumTracker = new Map();
 
+function obtenerOInicializarEstado(chatId) {
+    if (!userStates.has(chatId)) {
+        userStates.set(chatId, {
+            estado: null,
+            pendiente: null,
+            cola: [],
+            processing: false,
+            timestamp: Date.now(),
+            msgId: null,
+            modoGlobalCaptura: false
+        });
+    }
+    return userStates.get(chatId);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MANEJADORES DE ENTRADA
 // ═══════════════════════════════════════════════════════════════════════════
@@ -108,6 +123,18 @@ function manejarFotoDeAlbum(mediaGroupId, chatId, operario, fileId) {
  */
 async function encolarLote(chatId, lote) {
     const state = userStates.get(chatId);
+    if (state?.modoGlobalCaptura) {
+        state.cola.push(lote);
+        state.timestamp = Date.now();
+        const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
+        await bot.sendMessage(chatId,
+            `📥 Lote recibido (${lote.fileIds.length} foto${lote.fileIds.length > 1 ? 's' : ''}).\n` +
+            `Acumuladas en esta carga: *${totalFotos}*.\n` +
+            `Cuando termines, escribe */fin_carga* para ingresar una observación única y procesar todo.`,
+            { parse_mode: 'Markdown' }
+        ).catch(() => {});
+        return;
+    }
     const estaOcupado = state && (
         state.estado ||
         state.pendiente ||
@@ -307,7 +334,47 @@ bot.on('text', async (msg) => {
             `*📌 Comandos:*\n` +
             `/cola — Ver lotes en espera\n` +
             `/reset — Cancelar todo y reiniciar\n` +
+            `/nueva_carga — Iniciar carga global\n` +
+            `/fin_carga — Cerrar carga global\n` +
             `/ayuda — Ver esta ayuda`,
+            { parse_mode: 'Markdown' }
+        );
+        return;
+    }
+
+    if (texto === '/nueva_carga') {
+        const state = obtenerOInicializarEstado(chatId);
+        state.estado = 'capturando_carga';
+        state.pendiente = null;
+        state.processing = false;
+        state.modoGlobalCaptura = true;
+        state.cola = [];
+        state.timestamp = Date.now();
+        await bot.sendMessage(chatId,
+            `🚚 *Nueva carga iniciada.*\n\n` +
+            `Envía todas las fotos del camión.\n` +
+            `Al terminar, escribe */fin_carga* y te pediré una sola observación para todo.`,
+            { parse_mode: 'Markdown' }
+        );
+        return;
+    }
+
+    if (texto === '/fin_carga') {
+        const state = userStates.get(chatId);
+        if (!state || !state.modoGlobalCaptura) {
+            await bot.sendMessage(chatId, `ℹ️ No hay una carga global activa. Usa /nueva_carga.`);
+            return;
+        }
+        const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
+        if (totalFotos === 0) {
+            await bot.sendMessage(chatId, `⚠️ No hay fotos acumuladas en la carga actual.`);
+            return;
+        }
+        state.estado = 'esperando_obs_global';
+        state.timestamp = Date.now();
+        await bot.sendMessage(chatId,
+            `📝 Recibí *${totalFotos}* fotos.\n` +
+            `Escribe una *observación global* para toda la carga, o escribe *sin observaciones*.`,
             { parse_mode: 'Markdown' }
         );
         return;
@@ -315,6 +382,29 @@ bot.on('text', async (msg) => {
 
     // ── Si el usuario está escribiendo la observación ────────────────────────
     const state = userStates.get(chatId);
+    if (state && state.estado === 'esperando_obs_global') {
+        const observacionGlobal = texto.trim() || 'Sin observaciones';
+        state.estado = 'procesando_global';
+        state.processing = true;
+        state.timestamp = Date.now();
+        await bot.sendMessage(chatId,
+            `✅ Observación global guardada.\n⏳ Iniciando procesamiento de toda la carga...`,
+            { parse_mode: 'Markdown' }
+        );
+
+        while (state.cola.length > 0) {
+            const lote = state.cola.shift();
+            await iniciarProcesamiento(chatId, lote, observacionGlobal);
+        }
+
+        await bot.sendMessage(chatId,
+            `🎉 *Carga completada.*\nTodos los lotes de esta sesión fueron procesados.`,
+            { parse_mode: 'Markdown' }
+        );
+        userStates.delete(chatId);
+        return;
+    }
+
     if (state && state.estado === 'esperando_obs') {
         const observacion = texto.trim();
         const lote = state.pendiente;
