@@ -50,6 +50,12 @@ const DRIVE_ROOT_ID   = process.env.GOOGLE_DRIVE_FOLDER_ID || null; // ID fijo d
 //
 const userStates = new Map();
 
+// ─── Configuración de carga masiva ──────────────────────────────────────────
+const MAX_FOTOS_CARGA = 150;  // Límite máximo de fotos por carga
+const UMBRAL_SUGERENCIA_MASIVA = 10;  // Sugerir modo masivo al superar este número
+const TIMEOUT_DETECCION_FINALIZACION = 3000;  // 3 segundos para detectar fin de carga
+const TIMEOUT_RESPUESTA_USUARIO = 30000;  // 30 segundos para respuesta del usuario
+
 // ─── Rastreo de álbumes de Telegram ────────────────────────────────────────
 const albumTracker = new Map();
 
@@ -62,7 +68,9 @@ function obtenerOInicializarEstado(chatId) {
             processing: false,
             timestamp: Date.now(),
             msgId: null,
-            modoGlobalCaptura: false
+            modoGlobalCaptura: false,
+            fotosProcesadasEnCarga: 0,  // Contador para carga masiva automática
+            timerDeteccionFinalizacion: null  // Timer para detectar fin de carga
         });
     }
     return userStates.get(chatId);
@@ -119,23 +127,47 @@ function manejarFotoDeAlbum(mediaGroupId, chatId, operario, fileId) {
 
 /**
  * Recibe un lote nuevo para un chatId.
- * - Si NO hay pregunta activa → pregunta de inmediato.
+ * - Si está en modoGlobalCaptura → acumula sin preguntar y reinicia timer de detección.
+ * - Si NO hay pregunta activa → evalúa activar modo masivo o pregunta.
  * - Si HAY pregunta activa → agrega a la cola y notifica al usuario.
  */
 async function encolarLote(chatId, lote) {
-    const state = userStates.get(chatId);
+    const state = obtenerOInicializarEstado(chatId);
+    
+    // Modo captura global manual (comando /nueva_carga) o automático (10+ fotos)
     if (state?.modoGlobalCaptura) {
+        const totalFotosAcumuladas = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0) + lote.fileIds.length;
+        
+        if (totalFotosAcumuladas > MAX_FOTOS_CARGA) {
+            await bot.sendMessage(chatId,
+                `⚠️ *Límite excedido*.\n` +
+                `Has superado las *${MAX_FOTOS_CARGA} fotos* máximas permitidas.\n` +
+                `Procesa la carga actual antes de continuar.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+            return;
+        }
+        
         state.cola.push(lote);
         state.timestamp = Date.now();
-        const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
-        await bot.sendMessage(chatId,
-            `📥 Lote recibido (${lote.fileIds.length} foto${lote.fileIds.length > 1 ? 's' : ''}).\n` +
-            `Acumuladas en esta carga: *${totalFotos}*.\n` +
-            `Cuando termines, escribe */fin_carga* para ingresar una observación única y procesar todo.`,
-            { parse_mode: 'Markdown' }
-        ).catch(() => {});
+        
+        // Reiniciar timer de detección de finalización
+        clearTimeout(state.timerDeteccionFinalizacion);
+        state.timerDeteccionFinalizacion = setTimeout(async () => {
+            await detectarFinalizacionCarga(chatId);
+        }, TIMEOUT_DETECCION_FINALIZACION);
+        
+        const mensaje = totalFotosAcumuladas >= MAX_FOTOS_CARGA
+            ? `📥 *Límite alcanzado*: ${totalFotosAcumuladas}/${MAX_FOTOS_CARGA} fotos.\n` +
+              `⏳ Esperando confirmación automática...`
+            : `📥 Lote recibido (${lote.fileIds.length} foto${lote.fileIds.length > 1 ? 's' : ''}).\n` +
+              `Acumuladas: *${totalFotosAcumuladas}/${MAX_FOTOS_CARGA}*.\n` +
+              `_El sistema detectará automáticamente cuando termines de subir._`;
+        
+        await bot.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' }).catch(() => {});
         return;
     }
+    
     const estaOcupado = state && (
         state.estado ||
         state.pendiente ||
@@ -144,10 +176,48 @@ async function encolarLote(chatId, lote) {
     );
 
     if (!estaOcupado) {
-        // No hay nada pendiente ni en procesamiento → preguntar ahora
+        // Primer lote: evaluar si activar modo masivo automático
+        const totalFotosEnLote = lote.fileIds.length;
+        
+        if (totalFotosEnLote >= UMBRAL_SUGERENCIA_MASIVA) {
+            // Activar modo masivo automático: acumular hasta 150 fotos
+            state.modoGlobalCaptura = true;
+            state.cola.push(lote);
+            state.timestamp = Date.now();
+            
+            // Iniciar timer de detección de finalización
+            clearTimeout(state.timerDeteccionFinalizacion);
+            state.timerDeteccionFinalizacion = setTimeout(async () => {
+                await detectarFinalizacionCarga(chatId);
+            }, TIMEOUT_DETECCION_FINALIZACION);
+            
+            await bot.sendMessage(chatId,
+                `🚀 *Modo carga masiva activado automáticamente*.\n\n` +
+                `Detecté *${totalFotosEnLote} fotos* en este lote.\n` +
+                `Puedes enviar hasta *${MAX_FOTOS_CARGA} fotos* en total.\n\n` +
+                `📸 Sigue enviando fotos o álbumes.\n` +
+                `_El sistema te preguntará automáticamente cuando detecte que terminaste (3 segundos sin nuevas fotos)._`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+            return;
+        }
+        
+        // Menos de 10 fotos: flujo normal
         await pedirObservacion(chatId, lote);
     } else {
         // Ya hay un lote activo, en procesamiento o en espera → encolar y avisar
+        const totalFotosAcumuladas = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0) + lote.fileIds.length;
+        
+        if (totalFotosAcumuladas > MAX_FOTOS_CARGA) {
+            await bot.sendMessage(chatId,
+                `⚠️ *Límite excedido*.\n` +
+                `Has superado las *${MAX_FOTOS_CARGA} fotos* máximas permitidas.\n` +
+                `Las fotos excedentes no serán procesadas.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+            return;
+        }
+        
         state.cola.push(lote);
         state.timestamp = Date.now();
         const posicion = state.cola.length;
@@ -207,12 +277,104 @@ async function pedirObservacion(chatId, lote) {
 
 
 /**
+ * Detecta automáticamente cuando el usuario terminó de subir fotos.
+ * Se llama después de TIMEOUT_DETECCION_FINALIZACION sin nuevas fotos.
+ */
+async function detectarFinalizacionCarga(chatId) {
+    const state = userStates.get(chatId);
+    if (!state || !state.modoGlobalCaptura) return;
+    
+    const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
+    if (totalFotos === 0) return;
+    
+    // Limpiar timer para evitar múltiples llamadas
+    clearTimeout(state.timerDeteccionFinalizacion);
+    state.timerDeteccionFinalizacion = null;
+    
+    console.log(`✅ Detección automática: ${totalFotos} fotos recibidas para chat ${chatId}`);
+    
+    // Preguntar al usuario si desea agregar observación
+    const txt = `✅ Se recibieron *${totalFotos} foto${totalFotos > 1 ? 's' : ''}*.\n\n¿Deseas agregar una observación para todo el lote?`;
+    
+    state.estado = 'esperando_decision_global';
+    state.pendiente = { esLoteGlobal: true };
+    state.timestamp = Date.now();
+    
+    let msgEnviado;
+    try {
+        msgEnviado = await bot.sendMessage(chatId, txt, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[
+                    { text: '✅ Sin observación',    callback_data: `obs_no_global|${chatId}` },
+                    { text: '📝 Agregar observación', callback_data: `obs_si_global|${chatId}` }
+                ]]
+            }
+        });
+        state.msgId = msgEnviado.message_id;
+        
+        // Configurar timeout de respuesta del usuario (30 segundos)
+        state.timerRespuestaUsuario = setTimeout(async () => {
+            await manejarTimeoutRespuesta(chatId);
+        }, TIMEOUT_RESPUESTA_USUARIO);
+        
+    } catch (err) {
+        console.error('❌ Error enviando pregunta de finalización:', err.message);
+        userStates.delete(chatId);
+    }
+}
+
+/**
+ * Maneja el timeout cuando el usuario no responde en 30 segundos.
+ * Procesa automáticamente con "Sin observación".
+ */
+async function manejarTimeoutRespuesta(chatId) {
+    const state = userStates.get(chatId);
+    if (!state || state.estado !== 'esperando_decision_global') return;
+    
+    console.log(`⏰ Timeout de respuesta para chat ${chatId}, procesando sin observación`);
+    
+    try {
+        await bot.editMessageText(
+            `⏳ *Tiempo agotado*. Procesando *${state.cola.length} lotes* sin observación...`,
+            { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }
+        ).catch(() => {});
+        
+        // Procesar toda la cola sin observación
+        state.estado = 'procesando_global';
+        state.processing = true;
+        
+        while (state.cola.length > 0) {
+            const lote = state.cola.shift();
+            await iniciarProcesamiento(chatId, lote, 'Sin observaciones');
+        }
+        
+        await bot.sendMessage(chatId,
+            `🎉 *Carga completada.*\nTodos los lotes fueron procesados _sin observaciones_.`,
+            { parse_mode: 'Markdown' }
+        );
+        userStates.delete(chatId);
+        
+    } catch (err) {
+        console.error('❌ Error en timeout de respuesta:', err.message);
+        userStates.delete(chatId);
+    }
+}
+
+/**
  * Cuando el lote actual termina, saca el siguiente de la cola y pregunta.
- * Si la cola está vacía, limpia el estado.
+ * Si está en modo masivo o la cola está vacía, limpia el estado.
  */
 async function procesarSiguienteDeLaCola(chatId) {
     const state = userStates.get(chatId);
     if (!state) return;
+
+    // Si está en modo carga masiva, NO preguntar por cada lote
+    if (state.modoGlobalCaptura) {
+        // El timer de detección se encarga de preguntar al final
+        console.log(`✅ Modo masivo activo - timer detectará finalización para chat ${chatId}`);
+        return;
+    }
 
     if (state.cola.length === 0) {
         userStates.delete(chatId);
@@ -248,7 +410,7 @@ async function procesarSiguienteDeLaCola(chatId) {
 // ─── Manejador de botones inline ────────────────────────────────────────────
 bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
-    const data   = query.data; // "obs_no|chatId" o "obs_si|chatId"
+    const data   = query.data;
 
     await bot.answerCallbackQuery(query.id).catch(() => {});
 
@@ -260,10 +422,49 @@ bot.on('callback_query', async (query) => {
         return;
     }
 
+    // Limpiar timer de respuesta del usuario si existe
+    if (state.timerRespuestaUsuario) {
+        clearTimeout(state.timerRespuestaUsuario);
+        state.timerRespuestaUsuario = null;
+    }
+
+    // Manejo para carga global (modo masivo automático)
+    if (data.startsWith('obs_no_global')) {
+        // Sin observación → procesar todo el lote global
+        await bot.editMessageText(
+            `⏳ *Procesando ${state.cola.length} lotes (${state.cola.reduce((acc, l) => acc + l.fileIds.length, 0)} fotos)* sin observación...`,
+            { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' }
+        ).catch(() => {});
+
+        state.estado = 'procesando_global';
+        state.processing = true;
+        
+        while (state.cola.length > 0) {
+            const lote = state.cola.shift();
+            await iniciarProcesamiento(chatId, lote, 'Sin observaciones');
+        }
+
+        await bot.sendMessage(chatId,
+            `🎉 *Carga completada.*\nTodos los lotes fueron procesados _sin observaciones_.`,
+            { parse_mode: 'Markdown' }
+        );
+        userStates.delete(chatId);
+        return;
+        
+    } else if (data.startsWith('obs_si_global')) {
+        // Pedir texto de observación global
+        userStates.set(chatId, { ...state, estado: 'esperando_obs_global' });
+        await bot.editMessageText(
+            `✏️ *Escribe la observación para TODA la carga:*\n_Ejemplo: Lote completo - Turno mañana_`,
+            { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' }
+        ).catch(() => {});
+        return;
+    }
+
+    // Manejo normal (lote individual)
     if (data.startsWith('obs_no')) {
         // Sin observación → procesar de inmediato
         const lote = state.pendiente;
-        // Marcar como procesando (estado null para no bloquear cola)
         userStates.set(chatId, { ...state, estado: null, pendiente: null, processing: true });
 
         await bot.editMessageText(
@@ -331,14 +532,15 @@ bot.on('text', async (msg) => {
             `📋 *Cómo usar:*\n\n` +
             `*📷 Foto individual:*\nEnvía una foto → el bot pregunta si tienes observación → registra.\n\n` +
             `*📦 Álbum (múltiples fotos):*\nSelecciona hasta *10 fotos* y envíalas juntas.\nEl bot procesa todo el lote con una sola observación.\n\n` +
-            `*💡 Tip para camiones grandes:*\nPuedes enviar múltiples grupos sin esperar.\nEl bot encola automáticamente y pregunta uno por uno.\n\n` +
+            `*🚀 Carga masiva AUTOMÁTICA:*\nEnvía *${UMBRAL_SUGERENCIA_MASIVA} o más fotos* de una vez.\nEl sistema activa modo masivo y acumula hasta *${MAX_FOTOS_CARGA} fotos*.\n\n` +
+            `✅ *Detección automática:*\nEl sistema detecta cuando terminas de subir (3 segundos sin nuevas fotos).\nLuego pregunta: *¿Deseas agregar observación?* (Sí/No)\nSi no respondes en 30 segundos, procesa sin observación.\n\n` +
+            `*💡 Tip para camiones grandes:*\nPuedes enviar múltiples grupos sin esperar.\nEl bot encola automáticamente y procesa todo junto.\n\n` +
             `*📌 Comandos:*\n` +
             `/cola — Ver lotes en espera\n` +
             `/reset — Cancelar todo y reiniciar\n` +
-            `/nueva_carga — Iniciar carga global\n` +
-            `/fin_carga — Cerrar carga global\n` +
+            `/nueva_carga — Iniciar carga global manual (opcional)\n` +
+            `/fin_carga — Forzar procesamiento inmediato\n` +
             `/ayuda — Ver esta ayuda`,
-            { parse_mode: 'Markdown' }
         );
         return;
     }
@@ -353,8 +555,8 @@ bot.on('text', async (msg) => {
         state.timestamp = Date.now();
         await bot.sendMessage(chatId,
             `🚚 *Nueva carga iniciada.*\n\n` +
-            `Envía todas las fotos del camión.\n` +
-            `Al terminar, escribe */fin_carga* y te pediré una sola observación para todo.`,
+            `Envía todas las fotos del camión (máx. *${MAX_FOTOS_CARGA}*).\n` +
+            `_El sistema detectará automáticamente cuando termines (3 segundos sin nuevas fotos) o puedes escribir /fin_carga para forzar el procesamiento._`,
             { parse_mode: 'Markdown' }
         );
         return;
@@ -363,21 +565,24 @@ bot.on('text', async (msg) => {
     if (texto === '/fin_carga') {
         const state = userStates.get(chatId);
         if (!state || !state.modoGlobalCaptura) {
-            await bot.sendMessage(chatId, `ℹ️ No hay una carga global activa. Usa /nueva_carga.`);
+            await bot.sendMessage(chatId, `ℹ️ No hay una carga global activa. Usa /nueva_carga o envía más de ${UMBRAL_SUGERENCIA_MASIVA} fotos.`);
             return;
         }
+        
+        // Limpiar timer de detección automática si existe
+        if (state.timerDeteccionFinalizacion) {
+            clearTimeout(state.timerDeteccionFinalizacion);
+            state.timerDeteccionFinalizacion = null;
+        }
+        
         const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
         if (totalFotos === 0) {
             await bot.sendMessage(chatId, `⚠️ No hay fotos acumuladas en la carga actual.`);
             return;
         }
-        state.estado = 'esperando_obs_global';
-        state.timestamp = Date.now();
-        await bot.sendMessage(chatId,
-            `📝 Recibí *${totalFotos}* fotos.\n` +
-            `Escribe una *observación global* para toda la carga, o escribe *sin observaciones*.`,
-            { parse_mode: 'Markdown' }
-        );
+        
+        // Llamar directamente a la función de detección de finalización
+        await detectarFinalizacionCarga(chatId);
         return;
     }
 
