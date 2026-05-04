@@ -6,6 +6,7 @@ const { JWT } = require('google-auth-library');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
+const { Readable } = require('stream');
 
 // ─── Validación de variables de entorno ────────────────────────────────────
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
@@ -735,20 +736,22 @@ async function subirFotoADrive(buffer, nombreArchivo, nombreObs) {
         const drive    = google.drive({ version: 'v3', auth });
         const carpetaId = await obtenerOCrearCarpeta(drive, nombreObs);
 
-        await drive.files.create({
+        const nombreSeguro = sanitizarNombre(nombreArchivo).replace(/_jpg$/i, '.jpg');
+        const resUpload = await drive.files.create({
             requestBody: {
-                name    : nombreArchivo,
+                name    : nombreSeguro,
                 parents : [carpetaId],
                 mimeType: 'image/jpeg'
             },
             media: {
                 mimeType: 'image/jpeg',
-                body: buffer
+                body: Readable.from(buffer)
             },
-            fields: 'id'
+            fields: 'id, size, webViewLink',
+            supportsAllDrives: true
         });
 
-        console.log(`☁️ Drive: ${nombreArchivo} → ${nombreObs}`);
+        console.log(`☁️ Drive: ${nombreSeguro} → ${nombreObs} | id=${resUpload.data.id} | bytes=${resUpload.data.size || 'n/a'}`);
         return carpetaId;
     } catch (err) {
         // Drive falla silenciosamente — Sheets siempre tiene prioridad
