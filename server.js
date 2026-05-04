@@ -50,6 +50,10 @@ const DRIVE_ROOT_ID   = process.env.GOOGLE_DRIVE_FOLDER_ID || null; // ID fijo d
 //
 const userStates = new Map();
 
+// ─── Configuración de carga masiva ──────────────────────────────────────────
+const MAX_FOTOS_CARGA = 150;  // Límite máximo de fotos por carga
+const UMBRAL_SUGERENCIA_MASIVA = 10;  // Sugerir modo masivo al superar este número
+
 // ─── Rastreo de álbumes de Telegram ────────────────────────────────────────
 const albumTracker = new Map();
 
@@ -62,7 +66,8 @@ function obtenerOInicializarEstado(chatId) {
             processing: false,
             timestamp: Date.now(),
             msgId: null,
-            modoGlobalCaptura: false
+            modoGlobalCaptura: false,
+            fotosProcesadasEnCarga: 0  // Contador para carga masiva automática
         });
     }
     return userStates.get(chatId);
@@ -119,23 +124,38 @@ function manejarFotoDeAlbum(mediaGroupId, chatId, operario, fileId) {
 
 /**
  * Recibe un lote nuevo para un chatId.
- * - Si NO hay pregunta activa → pregunta de inmediato.
+ * - Si está en modoGlobalCaptura → acumula sin preguntar.
+ * - Si NO hay pregunta activa → evalúa activar modo masivo o pregunta.
  * - Si HAY pregunta activa → agrega a la cola y notifica al usuario.
  */
 async function encolarLote(chatId, lote) {
-    const state = userStates.get(chatId);
+    const state = obtenerOInicializarEstado(chatId);
+    
+    // Modo captura global manual (comando /nueva_carga)
     if (state?.modoGlobalCaptura) {
+        const totalFotosAcumuladas = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0) + lote.fileIds.length;
+        
+        if (totalFotosAcumuladas > MAX_FOTOS_CARGA) {
+            await bot.sendMessage(chatId,
+                `⚠️ *Límite excedido*.\n` +
+                `Has superado las *${MAX_FOTOS_CARGA} fotos* máximas permitidas.\n` +
+                `Procesa la carga actual con */fin_carga* antes de continuar.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+            return;
+        }
+        
         state.cola.push(lote);
         state.timestamp = Date.now();
-        const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
         await bot.sendMessage(chatId,
             `📥 Lote recibido (${lote.fileIds.length} foto${lote.fileIds.length > 1 ? 's' : ''}).\n` +
-            `Acumuladas en esta carga: *${totalFotos}*.\n` +
+            `Acumuladas en esta carga: *${totalFotosAcumuladas}/${MAX_FOTOS_CARGA}*.\n` +
             `Cuando termines, escribe */fin_carga* para ingresar una observación única y procesar todo.`,
             { parse_mode: 'Markdown' }
         ).catch(() => {});
         return;
     }
+    
     const estaOcupado = state && (
         state.estado ||
         state.pendiente ||
@@ -144,10 +164,42 @@ async function encolarLote(chatId, lote) {
     );
 
     if (!estaOcupado) {
-        // No hay nada pendiente ni en procesamiento → preguntar ahora
+        // Primer lote: evaluar si activar modo masivo automático
+        const totalFotosEnLote = lote.fileIds.length;
+        
+        if (totalFotosEnLote >= UMBRAL_SUGERENCIA_MASIVA) {
+            // Activar modo masivo automático: acumular hasta 150 fotos
+            state.modoGlobalCaptura = true;
+            state.cola.push(lote);
+            state.timestamp = Date.now();
+            
+            await bot.sendMessage(chatId,
+                `🚀 *Modo carga masiva activado automáticamente*.\n\n` +
+                `Detecté *${totalFotosEnLote} fotos* en este lote.\n` +
+                `Puedes enviar hasta *${MAX_FOTOS_CARGA} fotos* en total.\n\n` +
+                `📸 Sigue enviando fotos o álbumes.\n` +
+                `Cuando termines, escribe */fin_carga* para ingresar una observación única y procesar todo.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+            return;
+        }
+        
+        // Menos de 10 fotos: flujo normal
         await pedirObservacion(chatId, lote);
     } else {
         // Ya hay un lote activo, en procesamiento o en espera → encolar y avisar
+        const totalFotosAcumuladas = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0) + lote.fileIds.length;
+        
+        if (totalFotosAcumuladas > MAX_FOTOS_CARGA) {
+            await bot.sendMessage(chatId,
+                `⚠️ *Límite excedido*.\n` +
+                `Has superado las *${MAX_FOTOS_CARGA} fotos* máximas permitidas.\n` +
+                `Las fotos excedentes no serán procesadas.`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => {});
+            return;
+        }
+        
         state.cola.push(lote);
         state.timestamp = Date.now();
         const posicion = state.cola.length;
@@ -208,11 +260,18 @@ async function pedirObservacion(chatId, lote) {
 
 /**
  * Cuando el lote actual termina, saca el siguiente de la cola y pregunta.
- * Si la cola está vacía, limpia el estado.
+ * Si está en modo masivo o la cola está vacía, limpia el estado.
  */
 async function procesarSiguienteDeLaCola(chatId) {
     const state = userStates.get(chatId);
     if (!state) return;
+
+    // Si está en modo carga masiva, NO preguntar por cada lote
+    if (state.modoGlobalCaptura) {
+        userStates.delete(chatId);
+        console.log(`✅ Modo masivo activo - esperando /fin_carga para chat ${chatId}`);
+        return;
+    }
 
     if (state.cola.length === 0) {
         userStates.delete(chatId);
@@ -331,12 +390,13 @@ bot.on('text', async (msg) => {
             `📋 *Cómo usar:*\n\n` +
             `*📷 Foto individual:*\nEnvía una foto → el bot pregunta si tienes observación → registra.\n\n` +
             `*📦 Álbum (múltiples fotos):*\nSelecciona hasta *10 fotos* y envíalas juntas.\nEl bot procesa todo el lote con una sola observación.\n\n` +
+            `*🚀 Carga masiva automática:*\nEnvía *${UMBRAL_SUGERENCIA_MASIVA} o más fotos* de una vez.\nEl sistema activa modo masivo y acumula hasta *${MAX_FOTOS_CARGA} fotos*.\nAl finalizar, pide *una sola observación* para todo.\n\n` +
             `*💡 Tip para camiones grandes:*\nPuedes enviar múltiples grupos sin esperar.\nEl bot encola automáticamente y pregunta uno por uno.\n\n` +
             `*📌 Comandos:*\n` +
             `/cola — Ver lotes en espera\n` +
             `/reset — Cancelar todo y reiniciar\n` +
-            `/nueva_carga — Iniciar carga global\n` +
-            `/fin_carga — Cerrar carga global\n` +
+            `/nueva_carga — Iniciar carga global manual\n` +
+            `/fin_carga — Finalizar carga y pedir observación\n` +
             `/ayuda — Ver esta ayuda`,
             { parse_mode: 'Markdown' }
         );
@@ -353,7 +413,7 @@ bot.on('text', async (msg) => {
         state.timestamp = Date.now();
         await bot.sendMessage(chatId,
             `🚚 *Nueva carga iniciada.*\n\n` +
-            `Envía todas las fotos del camión.\n` +
+            `Envía todas las fotos del camión (máx. *${MAX_FOTOS_CARGA}*).\n` +
             `Al terminar, escribe */fin_carga* y te pediré una sola observación para todo.`,
             { parse_mode: 'Markdown' }
         );
@@ -363,7 +423,7 @@ bot.on('text', async (msg) => {
     if (texto === '/fin_carga') {
         const state = userStates.get(chatId);
         if (!state || !state.modoGlobalCaptura) {
-            await bot.sendMessage(chatId, `ℹ️ No hay una carga global activa. Usa /nueva_carga.`);
+            await bot.sendMessage(chatId, `ℹ️ No hay una carga global activa. Usa /nueva_carga o envía más de ${UMBRAL_SUGERENCIA_MASIVA} fotos.`);
             return;
         }
         const totalFotos = state.cola.reduce((acc, l) => acc + l.fileIds.length, 0);
